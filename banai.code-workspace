@@ -14,7 +14,7 @@
 				"request": "launch",
 				"mode": "debug",
 				"program": "${workspaceFolder}",
-				"args": ["-f","examples/banaifile.js"]
+				"args": ["-f","examples/testfile.js"]
 			},
 			{
 				"name": "Run func",
@@ -22,7 +22,7 @@
 				"request": "launch",
 				"mode": "debug",
 				"program": "${workspaceFolder}",
-				"args": ["-f","examples/banaifile.js","printOut"]
+				"args": ["-f","examples/testfile.js","printOut"]
 			}
 		]
 	}

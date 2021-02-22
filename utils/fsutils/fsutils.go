@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/sagiforbes/banai/utils/shellutils"
 )
 
 func listFilesInFolder(folderPath string) []string {
@@ -98,4 +100,81 @@ func Unzip(zipFileName, targetPath string) ([]string, error) {
 	}
 
 	return extractedFiles, nil
+}
+
+func copyDir(source, destination string) error {
+	if destination == "" {
+		destination = "."
+	}
+	srca, serr := filepath.Abs(source)
+	desa, derr := filepath.Abs(destination)
+	if serr != nil {
+		return serr
+	}
+	if derr != nil {
+		return derr
+	}
+	if srca == desa {
+		return nil //No need to copy file to itself
+	}
+
+	dstat, e := os.Stat(destination)
+	if os.IsNotExist(e) {
+		os.MkdirAll(desa, 0755)
+	} else {
+		if !dstat.IsDir() {
+			return fmt.Errorf("Cannot copy directory to file")
+		}
+	}
+
+	res, e := shellutils.RunShellCommand(fmt.Sprintf("cp -r %s %s", srca, desa))
+	if e != nil {
+		return e
+	}
+	if res.Code != 0 {
+		return fmt.Errorf("Exit copy directory with code %d", res.Code)
+	}
+	return nil
+}
+
+func copyFile(source, destination string) error {
+	if destination == "" {
+		destination = "."
+	}
+	srca, serr := filepath.Abs(source)
+	desa, derr := filepath.Abs(destination)
+	if serr != nil {
+		return serr
+	}
+	if derr != nil {
+		return derr
+	}
+	if srca == desa {
+		return nil //nothing todo no need to copy the file to itself
+	}
+	res, e := shellutils.RunShellCommand(fmt.Sprintf("cp %s %s", srca, desa))
+	if e != nil {
+		return e
+	}
+	if res.Code != 0 {
+		return fmt.Errorf("Exit copy file with code %d", res.Code)
+	}
+	return nil
+
+}
+
+//CopyfsItem copies source file or folder to a matching destination
+func CopyfsItem(source, destination string) error {
+	sourceStat, e := os.Stat(source)
+	if e != nil {
+		return e
+	}
+
+	if sourceStat.IsDir() {
+		return copyDir(source, destination)
+	}
+	if sourceStat.Mode().IsRegular() {
+		return copyFile(source, destination)
+	}
+	return fmt.Errorf("Cannot copy ", source)
 }

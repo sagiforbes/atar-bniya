@@ -1,17 +1,13 @@
 package shell
 
 import (
-	"context"
-	"fmt"
-	"io/ioutil"
 	"os"
-	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/robertkrimen/otto"
-	"github.com/sagiforbes/banai/ottoutils"
-	"github.com/sagiforbes/banai/sshutils"
+	"github.com/sagiforbes/banai/utils/ottoutils"
+	"github.com/sagiforbes/banai/utils/shellutils"
+	"github.com/sagiforbes/banai/utils/sshutils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
@@ -47,101 +43,16 @@ func environments(vm *otto.Otto) otto.Value {
 	return v
 }
 
-type shellResult struct {
-	Code int    `json:"code,omitempty"`
-	Out  string `json:"out,omitempty"`
-	Err  string `json:"err,omitempty"`
-}
-type commandOptions struct {
-	Shell   string   `json:"shell,omitempty"`
-	In      string   `json:"in,omitempty"`
-	Ins     []string `json:"ins,omitempty"`
-	Timeout int      `json:"timeout,omitempty"`
-}
-
-func runShellCommand(commandToRun string, cmdOpt ...commandOptions) (ret shellResult) {
-
-	var finalCommand = make([]string, 0)
-
-	var shellCmd = "/bin/bash"
-	if cmdOpt != nil {
-		if cmdOpt[0].Shell != "" {
-			shellCmd = cmdOpt[0].Shell
-		}
-
-	}
-
-	finalCommand = append(finalCommand, "-c")
-	finalCommand = append(finalCommand, commandToRun)
-
-	logger.Info("Running shell script:", shellCmd, strings.Join(finalCommand, " "))
-	var command *exec.Cmd
-	if cmdOpt != nil && cmdOpt[0].Timeout > 0 {
-		ctx, cancelFunc := context.WithTimeout(context.Background(), time.Duration(cmdOpt[0].Timeout)*time.Second)
-		defer cancelFunc()
-		command = exec.CommandContext(ctx, shellCmd, finalCommand...)
-	} else {
-		command = exec.Command(shellCmd, finalCommand...)
-	}
-
-	command.Env = append(command.Env, os.Environ()...)
-
-	cmdStdOutPipe, _ := command.StdoutPipe()
-	cmdStdErrPipe, _ := command.StderrPipe()
-	procWriter, _ := command.StdinPipe()
-
-	var err error
-	err = command.Start()
-	if err != nil {
-		logger.Panic("Failed to start command", err)
-	}
-
-	if cmdOpt != nil && cmdOpt[0].In != "" {
-		procWriter.Write([]byte(cmdOpt[0].In))
-		procWriter.Write([]byte("\n"))
-	}
-	if cmdOpt != nil && cmdOpt[0].Ins != nil {
-		for _, line := range cmdOpt[0].Ins {
-			procWriter.Write([]byte(line))
-			procWriter.Write([]byte("\n"))
-		}
-	}
-	var buf []byte
-	buf, err = ioutil.ReadAll(cmdStdOutPipe)
-	if err == nil {
-		ret.Out = string(buf)
-	}
-	buf, err = ioutil.ReadAll(cmdStdErrPipe)
-	if err == nil {
-		ret.Err = string(buf)
-	}
-
-	err = command.Wait()
-	if err == nil {
-		ret.Code = 0
-	} else {
-		if exiterr, ok := err.(*exec.ExitError); ok {
-			ret.Code = exiterr.ExitCode()
-		} else {
-			logger.Warn("Shell exit with error", err)
-			ret.Code = 1
-		}
-
-	}
-
-	return
-}
-
 func shell(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		var e error
 		var v otto.Value
-		var opt commandOptions
+		var opt shellutils.CommandOptions
 
 		var cmd string
 		cmd = call.ArgumentList[0].String()
 
-		var ret shellResult
+		var ret *shellutils.ShellResult
 		if len(call.ArgumentList) > 1 {
 			var v = call.ArgumentList[1]
 			if v.IsObject() {
@@ -152,11 +63,13 @@ func shell(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 				}
 
 			}
-			ret = runShellCommand(cmd, opt)
+			ret, e = shellutils.RunShellCommand(cmd, opt)
 		} else {
-			ret = runShellCommand(cmd)
+			ret, e = shellutils.RunShellCommand(cmd)
 		}
-
+		if e != nil {
+			logger.Panicf("Fiailed to execute command in shell: %s", e)
+		}
 		v, e = vm.ToValue(ret)
 		if e != nil {
 			logger.Error("Failed to run shell", e)
@@ -165,62 +78,6 @@ func shell(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 		return v
 	}
 
-}
-
-type sshConfig struct {
-	Address        string `json:"address,omitempty"`
-	User           string `json:"user,omitempty"`
-	Password       string `json:"password,omitempty"`
-	PrivateKeyFile string `json:"privateKeyFile,omitempty"`
-	Passphrase     string `json:"passphrase,omitempty"`
-}
-
-func runRemoteShell(sshConf sshConfig, cmd string) (*shellResult, error) {
-	var sshClientConf *ssh.ClientConfig
-	var e error
-
-	if sshConf.Address == "" {
-		return nil, fmt.Errorf("sshConfig target host Address not set")
-	}
-	if sshConf.User == "" {
-		return nil, fmt.Errorf("sshConfig User not set")
-	}
-
-	if sshConf.Password != "" {
-		sshClientConf = sshutils.CreateFromUserPassword(sshConf.User, sshConf.Password)
-	} else {
-		if sshConf.PrivateKeyFile != "" {
-			sshClientConf, e = sshutils.CreateFromPrivateKeyFile(sshConf.User, sshConf.PrivateKeyFile, sshConf.Passphrase)
-			if e != nil {
-				return nil, e
-			}
-		}
-	}
-
-	var client *sshutils.Client
-	client, e = sshutils.Dial(sshConf.Address, sshClientConf)
-	if e != nil {
-		return nil, e
-	}
-	defer client.Close()
-
-	logger.Info("Running on remote machine: ", sshConf.Address, " ", cmd)
-	stdout, stderr, e := client.Cmd(cmd)
-	if e != nil {
-		return nil, e
-	}
-
-	if len(stderr) > 0 {
-		return &shellResult{
-			Code: 1,
-			Out:  string(stdout),
-		}, nil
-	}
-
-	return &shellResult{
-		Code: 0,
-		Out:  string(stdout),
-	}, nil
 }
 
 func remoteshell(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
@@ -236,7 +93,7 @@ func remoteshell(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 		if !v.IsObject() {
 			logger.Panic("Invalid ssh option variable")
 		}
-		var sshConf sshConfig
+		var sshConf shellutils.ShellSSHConfig
 		if e = ottoutils.Val2Struct(v, &sshConf); e != nil {
 			logger.Panic("Invalid ssh option variable")
 		}
@@ -249,9 +106,9 @@ func remoteshell(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 		}
 		cmd = v.String()
 
-		var ret *shellResult
+		var ret *shellutils.ShellResult
 
-		ret, e = runRemoteShell(sshConf, cmd)
+		ret, e = shellutils.RunRemoteShell(sshConf, cmd)
 		if e != nil {
 			logger.Panic("Failed to execute remote shell: ", e)
 
@@ -277,7 +134,7 @@ func uploadFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 		if !v.IsObject() {
 			logger.Panic("Invalid ssh option variable")
 		}
-		var sshConf sshConfig
+		var sshConf shellutils.ShellSSHConfig
 		if e = ottoutils.Val2Struct(v, &sshConf); e != nil {
 			logger.Panic("Invalid ssh option variable")
 		}
@@ -355,7 +212,7 @@ func downloadFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 		if !v.IsObject() {
 			logger.Panic("Invalid ssh option variable")
 		}
-		var sshConf sshConfig
+		var sshConf shellutils.ShellSSHConfig
 		if e = ottoutils.Val2Struct(v, &sshConf); e != nil {
 			logger.Panic("Invalid ssh option variable")
 		}

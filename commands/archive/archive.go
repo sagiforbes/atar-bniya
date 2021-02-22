@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/robertkrimen/otto"
-	"github.com/sagiforbes/banai/fsutils"
+	"github.com/sagiforbes/banai/utils/fsutils"
 	"github.com/sirupsen/logrus"
 )
 

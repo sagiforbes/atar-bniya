@@ -6,8 +6,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"unicode/utf8"
 
 	"github.com/robertkrimen/otto"
+	"github.com/sagiforbes/banai/utils/fsutils"
+	"github.com/sagiforbes/banai/utils/shellutils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -25,48 +28,31 @@ func readFileContent(fileName string) ([]byte, error) {
 
 }
 
-func readBinFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 1 {
-			logger.Panic("Must have name of file")
-		}
-		v := call.ArgumentList[0]
-		if !v.IsString() {
-			logger.Panic("Invalid file name")
-		}
-		fileName := v.String()
-		b, err := readFileContent(fileName)
-		if err != nil {
-			logger.Panic("Error reading", fileName, err)
-		}
-
-		v, err = vm.ToValue(b)
-		if err != nil {
-			logger.Panic(err)
-		}
-		return v
-	}
-}
-
 func readFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 1 {
 			logger.Panic("Must have name of file")
 		}
-		v := call.ArgumentList[0]
-		if !v.IsString() {
-			logger.Panic("Invalid file name")
-		}
-		fileName := v.String()
+
+		fileName := call.ArgumentList[0].String()
 		b, err := readFileContent(fileName)
 		if err != nil {
 			logger.Panic("Error reading", fileName, err)
 		}
 
-		v, err = vm.ToValue(string(b))
-		if err != nil {
-			logger.Panic(err)
+		var v otto.Value
+		if !utf8.Valid(b) {
+			v, err = vm.ToValue(b)
+			if err != nil {
+				logger.Panic(err)
+			}
+		} else {
+			v, err = vm.ToValue(string(b))
+			if err != nil {
+				logger.Panic(err)
+			}
 		}
+
 		return v
 	}
 }
@@ -74,57 +60,35 @@ func readFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 func writeFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 2 {
-			logger.Panic("Must have file name and file content as text")
+			logger.Panic("Must have file name and file content")
 		}
-		v := call.ArgumentList[0]
-		if !v.IsString() {
-			logger.Panic("Invalid file name")
-		}
-		fileName := v.String()
+		fileName := call.ArgumentList[0].String()
 
-		v = call.ArgumentList[1]
-		if !v.IsString() {
-			logger.Panic("File content must be as text")
+		v := call.ArgumentList[1]
+		content := make([]byte, 0)
+		if v.IsString() {
+			content = []byte(call.ArgumentList[1].String())
+		} else {
+			arbitrary, err := v.Export()
+			if err != nil {
+				logger.Panicf("Cannot save this information to file, %s", err)
+			}
+			byteArray, ok := arbitrary.([]uint8)
+			if !ok {
+				logger.Panic("Cannot save this information to file. Content should be string or bytes")
+			}
+			content = byteArray
 		}
-		content := v.String()
 
-		err := ioutil.WriteFile(fileName, []byte(content), 0644)
+		err := ioutil.WriteFile(fileName, content, 0644)
 		if err != nil {
-			logger.Panic("Error writing file:", fileName, err)
+			logger.Panicf("Error writing file %s: %s", fileName, err)
 		}
 
 		return otto.Value{}
 	}
 }
 
-func writeBinFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 2 {
-			logger.Panic("Must have file name and file content as array of bytes")
-		}
-		v := call.ArgumentList[0]
-		if !v.IsString() {
-			logger.Panic("Invalid file name")
-		}
-		fileName := v.String()
-
-		v = call.ArgumentList[1]
-		if !v.IsObject() {
-			logger.Panic("File content must be as array of bytes")
-		}
-		content, err := v.Export()
-		if err != nil {
-			logger.Panic("Failed to read file content")
-		}
-
-		err = ioutil.WriteFile(fileName, content.([]byte), 0644)
-		if err != nil {
-			logger.Panic("Error writing file:", fileName, err)
-		}
-
-		return otto.Value{}
-	}
-}
 func createDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 1 {
@@ -150,42 +114,34 @@ func createDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	}
 }
 
+func fsRemoveDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+	return func(call otto.FunctionCall) otto.Value {
+		if len(call.ArgumentList) < 1 {
+			logger.Panic("Name of element to remove not set")
+		}
+		itemName := call.ArgumentList[0].String()
+		logger.Info("Deleting all under ", itemName)
+		err := os.RemoveAll(itemName)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				logger.Panicf("Failed to delete %s, %s", itemName, err)
+			}
+		}
+		return otto.Value{}
+	}
+}
+
 func fsRemove(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) < 1 {
 			logger.Panic("Name of element to remove not set")
 		}
-		v := call.ArgumentList[0]
-		if !v.IsString() {
-			logger.Panic("Invalid element name")
-		}
-		itemName := v.String()
-		_, err := os.Stat(itemName)
-		if os.IsNotExist(err) {
-			return otto.Value{}
-		}
+		itemName := call.ArgumentList[0].String()
 
-		deleteAll := false
-		if len(call.ArgumentList) > 1 {
-			v := call.ArgumentList[1]
-			if v.IsBoolean() {
-				deleteAll, _ = v.ToBoolean()
-			}
-		}
-		if deleteAll {
-			logger.Info("Deleting all under ", itemName)
-			err = os.RemoveAll(itemName)
-			if err != nil {
-				if !os.IsNotExist(err) {
-					logger.Panic("Failed to delete ", itemName, err)
-				}
-			}
-		} else {
-			err = os.Remove(itemName)
-			if err != nil {
-				if !os.IsNotExist(err) {
-					logger.Panic("Failed to delete ", itemName, err)
-				}
+		err := os.Remove(itemName)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				logger.Panicf("Failed to delete %s, %s", itemName, err)
 			}
 		}
 
@@ -227,25 +183,16 @@ func copyFiles(sourceFileName, destinationFileName string) error {
 	return err
 }
 
-func fileCopy(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func fsCopy(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 2 {
-			logger.Panic("copy must have two parameters, source file and destination file")
+			logger.Panic("copy must have two parameters, source and destination")
 		}
-		v := call.ArgumentList[0]
-		if !v.IsString() {
-			logger.Panic("Invalid source file name")
-		}
+		sourceFileName := call.ArgumentList[0].String()
 
-		sourceFileName := v.String()
+		destinationFileName := call.ArgumentList[1].String()
 
-		v = call.ArgumentList[1]
-		if !v.IsString() {
-			logger.Panic("Invalid destination file name")
-		}
-		destinationFileName := v.String()
-
-		err := copyFiles(sourceFileName, destinationFileName)
+		err := fsutils.CopyfsItem(sourceFileName, destinationFileName)
 		if err != nil {
 			logger.Panic("Failed to copy files ", err)
 		}
@@ -254,31 +201,21 @@ func fileCopy(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	}
 }
 
-func fileMove(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func fsMove(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 2 {
-			logger.Panic("copy must have two parameters, source file and destination file")
-		}
-		v := call.ArgumentList[0]
-		if !v.IsString() {
-			logger.Panic("Invalid source file name")
+			logger.Panic("Move must have two parameters, source and destination")
 		}
 
-		sourceFileName := v.String()
+		sourceFileName := call.ArgumentList[0].String()
+		destinationFileName := call.ArgumentList[1].String()
 
-		v = call.ArgumentList[1]
-		if !v.IsString() {
-			logger.Panic("Invalid destination file name")
-		}
-		destinationFileName := v.String()
-
-		err := copyFiles(sourceFileName, destinationFileName)
+		result, err := shellutils.RunShellCommand(fmt.Sprintf("mv %s %s", sourceFileName, destinationFileName))
 		if err != nil {
-			logger.Panic("Failed to move files ", err)
+			logger.Panic("Failed to move ", err)
 		}
-		err = os.Remove(sourceFileName)
-		if err != nil {
-			logger.Panicf("Failed to move source file %s, %s", sourceFileName, err)
+		if result.Code != 0 {
+			logger.Panic("Move exit code ", result.Code)
 		}
 
 		return otto.Value{}
@@ -349,10 +286,7 @@ func listAllSubitemsInDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value
 		var itemType = ""
 		var v otto.Value
 		if len(call.ArgumentList) > 0 {
-			v = call.ArgumentList[0]
-			if v.IsString() {
-				rootFolder = v.String()
-			}
+			rootFolder = call.ArgumentList[0].String()
 		}
 
 		if len(call.ArgumentList) > 1 {
@@ -448,15 +382,12 @@ func changeDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 func RegisterObjects(vm *otto.Otto, lgr *logrus.Logger) {
 	logger = lgr
 	vm.Set("fsRead", readFile(vm))
-	vm.Set("fsReadBin", readBinFile(vm))
 	vm.Set("fsWrite", writeFile(vm))
-	vm.Set("fsWriteBin", writeBinFile(vm))
 	vm.Set("fsCreateDir", createDir(vm))
-	vm.Set("fsRemoveDir", fsRemove(vm))
-	vm.Set("fsRemoveFile", fsRemove(vm))
+	vm.Set("fsRemoveDir", fsRemoveDir(vm))
 	vm.Set("fsRemove", fsRemove(vm))
-	vm.Set("fsCopy", fileCopy(vm))
-	vm.Set("fsMove", fileMove(vm))
+	vm.Set("fsCopy", fsCopy(vm))
+	vm.Set("fsMove", fsMove(vm))
 	vm.Set("fsSplit", splitPathNameComponents(vm))
 	vm.Set("fsJoin", joinPathParts(vm))
 	vm.Set("fsList", listAllSubitemsInDir(vm))

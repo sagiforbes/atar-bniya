@@ -37,8 +37,7 @@ func DefaultBashCommandOptions() CommandOptions {
 //RunShellCommand execute a command using the shell
 func RunShellCommand(commandToRun string, cmdOpt ...CommandOptions) (*ShellResult, error) {
 	if cmdOpt == nil {
-		cmdOpt = make([]CommandOptions, 0)
-		cmdOpt[0] = DefaultBashCommandOptions()
+		cmdOpt = []CommandOptions{DefaultBashCommandOptions()}
 	}
 
 	var finalCommand = make([]string, 0)

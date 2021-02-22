@@ -57,7 +57,12 @@ func runBuild(scriptFileName string, funcCalls []string, outputConsummer *chan s
 			<-abort
 			vm.Interrupt <- func() { panic("Abort execution") }
 		}()
-
+		if scriptFileName == defaultScriptFileName {
+			_, err := os.Stat(scriptFileName)
+			if os.IsNotExist(err) {
+				scriptFileName = defaultScriptFileName + ".js"
+			}
+		}
 		script, err := vm.Compile(scriptFileName, loadScript(scriptFileName))
 		if err != nil {
 			panic(fmt.Sprintln("Failed to compile script ", err))

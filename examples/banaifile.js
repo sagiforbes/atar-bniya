@@ -35,20 +35,20 @@ function remoteCommands() {
 
 function fileExamples() {
     var finalFile = "dump/my-text12.txt"
-    fsRemoveFile(finalFile)
-    var fileContentBin = fsReadBin("examples/text.txt")
+    fsRemove(finalFile)
+    var fileContentBin = fsRead("examples/text.txt")
     console.log("Reading binary file:\n", fileContentBin)
     var fileContentText = fsRead("examples/text.txt")
     console.log("Reading text file:\n", fileContentText)
 
     fsWrite("dump/bin.txt", fileContentText)
-    fsWriteBin("dump/bin.dat", fileContentBin)
+    fsWrite("dump/bin.dat", fileContentBin)
 
     console.log("Create dir")
     fsCreateDir("dump/mydir")
     fsWrite("dump/mydir/text.txt", "asdasdasd")
-    fsCopyFile("dump/mydir/text.txt", "dump/my-text2.txt")
-    fsMoveFile("dump/my-text2.txt", finalFile)
+    fsCopy("dump/mydir/text.txt", "dump/my-text2.txt")
+    fsMove("dump/my-text2.txt", finalFile)
     console.log("Delete dir")
     fsRemoveDir("dump/mydir", true)
 
@@ -94,9 +94,9 @@ function hashExample(){
 function main() {
     console.log("DESKTOP_SESSION, as key, value is: ", env['DESKTOP_SESSION'])
 
-    //localScripts()
+    localScripts()
     //remoteCommands()
-    //fileExamples()
+    fileExamples()
     //zipExample()
     //dockerExample()
     hashExample()

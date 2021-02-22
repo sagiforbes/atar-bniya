@@ -49,8 +49,14 @@ func shell(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 		var v otto.Value
 		var opt shellutils.CommandOptions
 
+		if len(call.ArgumentList) < 1 {
+			return otto.Value{}
+		}
+
 		var cmd string
-		cmd = call.ArgumentList[0].String()
+		if len(call.ArgumentList) > 0 {
+			cmd = call.ArgumentList[0].String()
+		}
 
 		var ret *shellutils.ShellResult
 		if len(call.ArgumentList) > 1 {

@@ -45,43 +45,47 @@ func environments(vm *otto.Otto) otto.Value {
 
 func shell(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
-		var e error
+		//		var e error
 		var v otto.Value
-		var opt shellutils.CommandOptions
+		//		var opt shellutils.CommandOptions
 
 		if len(call.ArgumentList) < 1 {
 			return otto.Value{}
 		}
 
-		var cmd string
-		if len(call.ArgumentList) > 0 {
-			cmd = call.ArgumentList[0].String()
-		}
+		v = call.Otto.MakeCustomError("name", "message from error")
 
-		var ret *shellutils.ShellResult
-		if len(call.ArgumentList) > 1 {
-			var v = call.ArgumentList[1]
-			if v.IsObject() {
-				e = ottoutils.Val2Struct(v, &opt)
-				if e != nil {
-					logger.Panic("Failed to get shell options", e)
-
-				}
-
-			}
-			ret, e = shellutils.RunShellCommand(cmd, opt)
-		} else {
-			ret, e = shellutils.RunShellCommand(cmd)
-		}
-		if e != nil {
-			logger.Panicf("Fiailed to execute command in shell: %s", e)
-		}
-		v, e = vm.ToValue(ret)
-		if e != nil {
-			logger.Error("Failed to run shell", e)
-			panic(e)
-		}
 		return v
+
+		// var cmd string
+		// if len(call.ArgumentList) > 0 {
+		// 	cmd = call.ArgumentList[0].String()
+		// }
+
+		// var ret *shellutils.ShellResult
+		// if len(call.ArgumentList) > 1 {
+		// 	var v = call.ArgumentList[1]
+		// 	if v.IsObject() {
+		// 		e = ottoutils.Val2Struct(v, &opt)
+		// 		if e != nil {
+		// 			logger.Panic("Failed to get shell options", e)
+
+		// 		}
+
+		// 	}
+		// 	ret, e = shellutils.RunShellCommand(cmd, opt)
+		// } else {
+		// 	ret, e = shellutils.RunShellCommand(cmd)
+		// }
+		// if e != nil {
+		// 	logger.Panicf("Fiailed to execute command in shell: %s", e)
+		// }
+		// v, e = vm.ToValue(ret)
+		// if e != nil {
+		// 	logger.Error("Failed to run shell", e)
+		// 	panic(e)
+		// }
+		// return v
 	}
 
 }

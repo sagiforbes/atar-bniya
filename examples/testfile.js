@@ -4,13 +4,9 @@ function printOut() {
 
 function localScripts() {
     //---------- local script
-    console.log("Running ls on local")
     res = sh('ls -l')
     console.log(JSON.stringify(res))
-    cd("dump")
-    console.log("Current folder: ",pwd())
-    cd("..")
-    console.log("Current folder: ",pwd())
+    
 }
 
 
@@ -96,8 +92,8 @@ function main() {
 
     localScripts()
     //remoteCommands()
-    fileExamples()
+    //fileExamples()
     //zipExample()
     //dockerExample()
-    hashExample()
+    //hashExample()
 }

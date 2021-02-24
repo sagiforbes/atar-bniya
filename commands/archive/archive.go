@@ -4,11 +4,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/robertkrimen/otto"
+	"github.com/sagiforbes/banai/infra"
 	"github.com/sagiforbes/banai/utils/fsutils"
 	"github.com/sirupsen/logrus"
 )
 
+var banai *infra.Banai
 var logger *logrus.Logger
 
 func discoverFilesInFolder(folderPath string) []string {
@@ -26,73 +27,28 @@ func discoverFilesInFolder(folderPath string) []string {
 	return files
 }
 
-func archiveToZip(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
+func archiveToZip(zipFileName string, sourcePath string) []string {
 
-		if len(call.ArgumentList) != 2 {
-			logger.Panic("zip Should have two parameters. The first is the name of the zip, The seconds is the name of the folder to zip")
-		}
-		v := call.ArgumentList[0]
-		if !v.IsString() {
-			logger.Panic("Invalid zip file name")
-		}
-		zipFileName := v.String()
-
-		v = call.ArgumentList[1]
-		if !v.IsString() {
-			logger.Panic("Invalid path to zip")
-		}
-		sourcePath := v.String()
-
-		zippedFiles, err := fsutils.ZipFolder(zipFileName, sourcePath)
-		if err != nil {
-			logger.Panic("Fialed to zip folder: %s, %s", sourcePath, err)
-		}
-		logger.Infof("Zipped files: %v", zippedFiles)
-		v, _ = vm.ToValue(zippedFiles)
-		return v
-	}
-}
-
-func unarchiveFromZip(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 2 {
-			logger.Panic("unzip Should have two parameters. The first is the name of the zip to extract, The seconds is the destination folder.")
-		}
-		v := call.ArgumentList[0]
-		if !v.IsString() {
-			logger.Panic("Invalid zip file name")
-		}
-		zipFileName := v.String()
-
-		v = call.ArgumentList[1]
-		if !v.IsString() {
-			logger.Panic("Invalid path to zip")
-		}
-		targetPath := v.String()
-
-		fileList, err := fsutils.Unzip(zipFileName, targetPath)
-		if err != nil {
-			logger.Panic("Fialed to unzip file: ", err)
-		}
-
-		logger.Infof("Unzipped files %v", fileList)
-
-		v, _ = vm.ToValue(fileList)
-		return v
-	}
+	zippedFiles, err := fsutils.ZipFolder(zipFileName, sourcePath)
+	banai.PanicOnError(err)
+	banai.Logger.Info(zippedFiles)
+	return zippedFiles
 
 }
 
-//RegisterObjects register archive objects
-func RegisterObjects(vm *otto.Otto, lgr *logrus.Logger) {
-	logger = lgr
-	vm.Set("arZip", archiveToZip(vm))
-	vm.Set("arUnzip", unarchiveFromZip(vm))
+func unarchiveFromZip(zipFileName, targetPath string) []string {
+
+	fileList, err := fsutils.Unzip(zipFileName, targetPath)
+	banai.PanicOnError(err)
+
+	banai.Logger.Infof("Unzipped files %v", fileList)
+	return fileList
 }
 
-func exampleImplementation(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		return otto.Value{}
-	}
+//RegisterJSObjects register archive objects
+func RegisterJSObjects(b *infra.Banai) {
+	banai = b
+	logger = b.Logger
+	banai.Jse.GlobalObject().Set("arZip", archiveToZip)
+	banai.Jse.GlobalObject().Set("arUnzip", unarchiveFromZip)
 }

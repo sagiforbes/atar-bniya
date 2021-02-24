@@ -6,13 +6,12 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/robertkrimen/otto"
+	"github.com/dop251/goja"
 	"github.com/sagiforbes/banai/commands/archive"
-
 	"github.com/sagiforbes/banai/commands/fs"
 	hashImpl "github.com/sagiforbes/banai/commands/hash"
 	"github.com/sagiforbes/banai/commands/shell"
-	"github.com/sirupsen/logrus"
+	"github.com/sagiforbes/banai/infra"
 )
 
 const (
@@ -37,25 +36,24 @@ func runBuild(scriptFileName string, funcCalls []string, outputConsummer *chan s
 	abort = make(chan bool)
 	done = make(chan bool)
 
-	var logger *logrus.Logger = logrus.New()
+	var b = infra.NewBanai()
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
 				if outputConsummer != nil {
 					*outputConsummer <- fmt.Sprint(err)
 				}
-				logger.Error(err)
-				logger.Error("Script execution exit with error !!!!!")
+				b.Logger.Error(err)
+				b.Logger.Error("Script execution exit with error !!!!!")
 			}
-
+			b.Close()
 			done <- true
 
 		}()
-		vm := otto.New()
-		vm.Interrupt = make(chan func(), 1)
+
 		go func() {
 			<-abort
-			vm.Interrupt <- func() { panic("Abort execution") }
+			b.Jse.Interrupt("Abort execution")
 		}()
 		if scriptFileName == defaultScriptFileName {
 			_, err := os.Stat(scriptFileName)
@@ -63,46 +61,37 @@ func runBuild(scriptFileName string, funcCalls []string, outputConsummer *chan s
 				scriptFileName = defaultScriptFileName + ".js"
 			}
 		}
-		script, err := vm.Compile(scriptFileName, loadScript(scriptFileName))
+		program, err := goja.Compile(scriptFileName, loadScript(scriptFileName), false)
 		if err != nil {
-			panic(fmt.Sprintln("Failed to compile script ", err))
+			panic(fmt.Sprintln("Failed to compile script ", scriptFileName, err))
 		}
-		_, err = vm.Run(script)
-		if err != nil {
-			logger.Panic("Error running script", err)
-		}
-		shell.RegisterObjects(vm, logger)
-		archive.RegisterObjects(vm, logger)
-		fs.RegisterObjects(vm, logger)
-		hashImpl.RegisterObjects(vm, logger)
 
+		shell.RegisterJSObjects(b)
+		archive.RegisterJSObjects(b)
+		fs.RegisterJSObjects(b)
+		hashImpl.RegisterJSObjects(b)
+
+		runVal, err := b.Jse.RunProgram(program)
+
+		if err != nil {
+			b.Logger.Panic("Failed to run program", err)
+		}
+		b.Logger.Info("Programe run return value: ", runVal)
 		if len(funcCalls) > 0 {
-			var funcVal otto.Value
-			for _, f := range funcCalls {
-				funcVal, err = vm.Get(f)
-				if err != nil || funcVal == otto.UndefinedValue() {
-					logger.Error("Cannot execute finction", f, err)
-					panic(err)
-				} else {
-					logger.Println("Executing", f)
-					_, err = funcVal.Call(funcVal)
-					if err != nil {
-						logger.Panic("Failed when executing javascript ", err)
-					}
+			for _, fn := range funcCalls {
+				fnc, ok := goja.AssertFunction(b.Jse.Get(fn))
+				if !ok {
+					b.Logger.Panic(fmt.Errorf("function %s not found", fn))
 				}
+				fnc(goja.Undefined())
 			}
 
 		} else {
-			mainFunc, err := vm.Get(mainFuncName)
-			if err != nil || mainFunc == otto.UndefinedValue() {
-				logger.Warn("No main function defined")
-			} else {
-				logger.Println("Starting", mainFuncName)
-				_, err := mainFunc.Call(mainFunc)
-				if err != nil {
-					logger.Panic("Failed when executing javascript ", err)
-				}
+			mainFunc, ok := goja.AssertFunction(b.Jse.Get("main"))
+			if !ok {
+				b.Logger.Panic("main function not found")
 			}
+			mainFunc(goja.Undefined())
 
 		}
 	}()

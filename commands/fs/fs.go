@@ -10,7 +10,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
+<<<<<<< HEAD
 	"github.com/dop251/goja"
+=======
+	"github.com/robertkrimen/otto"
+>>>>>>> main
 	"github.com/sagiforbes/banai/infra"
 	"github.com/sagiforbes/banai/utils/fsutils"
 	"github.com/sagiforbes/banai/utils/shellutils"
@@ -30,10 +34,18 @@ func readFileContent(fileName string) ([]byte, error) {
 
 }
 
+<<<<<<< HEAD
 func readFile(fileName string) goja.Value {
 
 	ba, err := readFileContent(fileName)
 	banai.PanicOnError(err)
+=======
+func readFile(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
+	return func(call otto.FunctionCall) otto.Value {
+		if len(call.ArgumentList) != 1 {
+			logger.Panic("Must have name of file")
+		}
+>>>>>>> main
 
 	var v goja.Value
 	if !utf8.Valid(ba) {
@@ -41,17 +53,41 @@ func readFile(fileName string) goja.Value {
 		if err != nil {
 			banai.Logger.Panic(err)
 		}
+<<<<<<< HEAD
 	} else {
 		v = banai.Jse.ToValue(string(ba))
 		if err != nil {
 			banai.Logger.Panic(err)
+=======
+
+		var v otto.Value
+		if !utf8.Valid(b) {
+			v, err = call.Otto.ToValue(b)
+			if err != nil {
+				logger.Panic(err)
+			}
+		} else {
+			v, err = call.Otto.ToValue(string(b))
+			if err != nil {
+				logger.Panic(err)
+			}
+>>>>>>> main
 		}
 	}
 
 	return v
 }
 
+<<<<<<< HEAD
 func writeFile(fileName string, v goja.Value) {
+=======
+func writeFile(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
+	return func(call otto.FunctionCall) otto.Value {
+		if len(call.ArgumentList) != 2 {
+			logger.Panic("Must have file name and file content")
+		}
+		fileName := call.ArgumentList[0].String()
+>>>>>>> main
 
 	paramVal := v.Export()
 
@@ -74,11 +110,18 @@ func writeFile(fileName string, v goja.Value) {
 	}
 }
 
+<<<<<<< HEAD
 func createDir(dirName string) {
 	s, err := os.Stat(dirName)
 	if os.IsNotExist(err) {
 		if err := os.MkdirAll(dirName, 0755); err != nil {
 			banai.PanicOnError(fmt.Errorf("Failed to create dir %s", err))
+=======
+func createDir(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
+	return func(call otto.FunctionCall) otto.Value {
+		if len(call.ArgumentList) != 1 {
+			logger.Panic("Name of dir not set")
+>>>>>>> main
 		}
 	} else {
 		if !s.IsDir() {
@@ -87,18 +130,42 @@ func createDir(dirName string) {
 	}
 }
 
+<<<<<<< HEAD
 func fsRemoveDir(itemName string) {
 	banai.Logger.Info("Deleting all under ", itemName)
 	err := os.RemoveAll(itemName)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			banai.PanicOnError(fmt.Errorf("Failed to delete %s, %s", itemName, err))
+=======
+func fsRemoveDir(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
+	return func(call otto.FunctionCall) otto.Value {
+		if len(call.ArgumentList) < 1 {
+			logger.Panic("Name of element to remove not set")
+		}
+		itemName := call.ArgumentList[0].String()
+		logger.Info("Deleting all under ", itemName)
+		err := os.RemoveAll(itemName)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				logger.Panicf("Failed to delete %s, %s", itemName, err)
+			}
+>>>>>>> main
 		}
 	}
 
 }
 
+<<<<<<< HEAD
 func fsRemove(itemName string) {
+=======
+func fsRemove(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
+	return func(call otto.FunctionCall) otto.Value {
+		if len(call.ArgumentList) < 1 {
+			logger.Panic("Name of element to remove not set")
+		}
+		itemName := call.ArgumentList[0].String()
+>>>>>>> main
 
 	err := os.Remove(itemName)
 	if err != nil {

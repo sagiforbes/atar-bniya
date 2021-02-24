@@ -6,9 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/robertkrimen/otto"
 	"github.com/sagiforbes/banai/infra"
-	"github.com/sagiforbes/banai/utils/ottoutils"
 	"github.com/sagiforbes/banai/utils/shellutils"
 	"github.com/sagiforbes/banai/utils/sshutils"
 	"github.com/sirupsen/logrus"
@@ -16,6 +14,7 @@ import (
 )
 
 var logger *logrus.Logger
+var banai *infra.Banai
 
 func envToMap() map[string]string {
 	var asMap = make(map[string]string)
@@ -36,56 +35,15 @@ func envToMap() map[string]string {
 	return asMap
 }
 
-func panicOnError(e error, t ...string) {
-	if e != nil {
-		if t != nil {
-			logger.Panic(t)
-			logger.Panic(e)
-		} else {
-			logger.Panic(e)
-		}
-
-	}
-}
-
-func environments(b *infra.Banai) otto.Value {
-
-	v, e := b.Jse.ToValue(envToMap())
-	if e != nil {
-		logger.Panic("Failed to translate env vars:")
-
-	}
-	return v
-}
-
-func callShell(b *infra.Banai, call otto.FunctionCall) (otto.Value, error) {
+func callShell(cmd string, cmdOpt ...shellutils.CommandOptions) *shellutils.ShellResult {
 	var e error
 
-	var opt shellutils.CommandOptions
-
-	if len(call.ArgumentList) < 1 {
-		return otto.Value{}, nil
-	}
-
-	var cmd string
-	if len(call.ArgumentList) > 0 {
-		cmd = call.ArgumentList[0].String()
-	}
-
 	var ret *shellutils.ShellResult
-	if len(call.ArgumentList) > 1 {
-		var v = call.ArgumentList[1]
-		if v.IsObject() {
-			e = ottoutils.Val2Struct(v, &opt)
-			if e != nil {
-				logger.Panic("Failed to get shell options", e)
-
-			}
-
-		}
+	if cmdOpt != nil && len(cmdOpt) > 0 {
+		opt := cmdOpt[0]
 		if opt.SecretID != "" {
-			secret, err := b.GetSecret(opt.SecretID)
-			panicOnError(err)
+			secret, err := banai.GetSecret(opt.SecretID)
+			banai.PanicOnError(err)
 			switch secret.GetType() {
 			case "ssh":
 				s := secret.(infra.SSHWithPrivate)
@@ -101,42 +59,26 @@ func callShell(b *infra.Banai, call otto.FunctionCall) (otto.Value, error) {
 	} else {
 		ret, e = shellutils.RunShellCommand(cmd)
 	}
-	if e != nil {
-		logger.Panicf("Fiailed to execute command in shell: %s", e)
-	}
-	return call.Otto.ToValue(ret)
+	banai.PanicOnError(e)
+
+	return ret
 }
 
-func shellScript(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) < 1 {
-			return otto.Value{}
-		}
-		fileName := call.ArgumentList[0].String()
-		fileContent, e := ioutil.ReadFile(fileName)
-		panicOnError(e)
-		v, _ := call.Otto.ToValue(string(fileContent))
-		call.ArgumentList[0] = v
-		v, e = callShell(b, call)
-		panicOnError(e)
-		return v
-	}
+func shellScript(scriptFile string, cmdOpt ...shellutils.CommandOptions) *shellutils.ShellResult {
+	fileContent, e := ioutil.ReadFile(scriptFile)
+	banai.PanicOnError(e)
+	return callShell(string(fileContent), cmdOpt...)
 }
 
-func shell(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		v, e := callShell(b, call)
-		panicOnError(e)
-		return v
-	}
-
+func shell(cmd string, cmdOpt ...shellutils.CommandOptions) *shellutils.ShellResult {
+	return callShell(cmd, cmdOpt...)
 }
 
 func updateSSHConfigBySecret(b *infra.Banai, secretID string, sshConf *shellutils.ShellSSHConfig) {
 	if sshConf.SecretID != "" {
 		v, err := b.GetSecret(sshConf.SecretID)
 		if err != nil {
-			panicOnError(err)
+			b.PanicOnError(err)
 		}
 		switch v.GetType() {
 		case "ssh":
@@ -154,250 +96,133 @@ func updateSSHConfigBySecret(b *infra.Banai, secretID string, sshConf *shellutil
 
 }
 
-func remoteshell(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		var e error
-		var v otto.Value
+func remoteshell(sshConf shellutils.ShellSSHConfig, cmd string) *shellutils.ShellResult {
+	var e error
 
-		if len(call.ArgumentList) != 2 {
-			logger.Panic("Function must have two parameters, sshOpt and cmd as string")
-		}
+	updateSSHConfigBySecret(banai, sshConf.SecretID, &sshConf)
 
-		v = call.ArgumentList[0]
-		if !v.IsObject() {
-			logger.Panic("Invalid ssh option variable")
-		}
-		var sshConf shellutils.ShellSSHConfig
-		if e = ottoutils.Val2Struct(v, &sshConf); e != nil {
-			panicOnError(e, "Invalid ssh option variable")
-		}
+	var ret *shellutils.ShellResult
 
-		updateSSHConfigBySecret(b, sshConf.SecretID, &sshConf)
-		var cmd string
-		v = call.ArgumentList[1]
-		if !v.IsString() {
-			logger.Panic("Command must be a string")
-
-		}
-		cmd = v.String()
-
-		var ret *shellutils.ShellResult
-
-		ret, e = shellutils.RunRemoteShell(sshConf, cmd)
-		if e != nil {
-			logger.Panic("Failed to execute remote shell: ", e)
-
-		}
-		v, e = call.Otto.ToValue(ret)
-		if e != nil {
-			logger.Panic("Failed to run shell", e)
-		}
-		return v
-	}
+	ret, e = shellutils.RunRemoteShell(sshConf, cmd)
+	banai.PanicOnError(e)
+	return ret
 }
 
-func uploadFile(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		var e error
-		var v otto.Value
+func uploadFile(sshConf shellutils.ShellSSHConfig, localFile, remoteFile string) {
+	var e error
 
-		if len(call.ArgumentList) != 3 {
-			logger.Panic("Function parameters are sshOpt local file and remote file")
-		}
+	updateSSHConfigBySecret(banai, sshConf.SecretID, &sshConf)
 
-		v = call.ArgumentList[0]
-		if !v.IsObject() {
-			logger.Panic("Invalid ssh option variable")
-		}
-		var sshConf shellutils.ShellSSHConfig
-		if e = ottoutils.Val2Struct(v, &sshConf); e != nil {
-			logger.Panic("Invalid ssh option variable")
-		}
-
-		updateSSHConfigBySecret(b, sshConf.SecretID, &sshConf)
-
-		var localFile string
-		v = call.ArgumentList[1]
-		if !v.IsString() {
-			logger.Panic("Local file not set")
-
-		}
-		localFile = v.String()
-
-		if stat, e := os.Stat(localFile); e != nil {
-			logger.Panic("Failed to open local file", e)
-		} else {
-			if stat.IsDir() {
-				logger.Panic("Local file is directory", e)
-			}
-		}
-
-		var remoteFile string
-		v = call.ArgumentList[2]
-		if !v.IsString() {
-			logger.Panic("Local file not set")
-
-		}
-		remoteFile = v.String()
-
-		var sshClientConf *ssh.ClientConfig
-
-		if sshConf.Address == "" {
-			logger.Panic("sshConfig target host Address not set")
-		}
-		if sshConf.User == "" {
-			logger.Panic("sshConfig User not set")
-		}
-
-		if sshConf.Password != "" {
-			sshClientConf = sshutils.CreateFromUserPassword(sshConf.User, sshConf.Password)
-		} else {
-			if sshConf.PrivateKeyFile != "" {
-				sshClientConf, e = sshutils.CreateFromPrivateKeyFile(sshConf.User, sshConf.PrivateKeyFile, sshConf.Passphrase)
-				if e != nil {
-					logger.Panic(e)
-				}
-			}
-		}
-
-		var client *sshutils.Client
-		client, e = sshutils.Dial(sshConf.Address, sshClientConf)
-		if e != nil {
-			logger.Panic(e)
-		}
-
-		defer client.Close()
-
-		e = client.UploadFile(localFile, remoteFile)
-		if e != nil {
-			logger.Panic(e)
-		}
-
-		return otto.Value{}
+	if sshConf.Address == "" {
+		logger.Panic("sshConfig target host Address not set")
 	}
+	if sshConf.User == "" {
+		logger.Panic("sshConfig User not set")
+	}
+
+	var sshClientConf *ssh.ClientConfig
+
+	if sshConf.Password != "" {
+		sshClientConf = sshutils.CreateFromUserPassword(sshConf.User, sshConf.Password)
+	} else {
+		if sshConf.PrivateKeyFile != "" {
+			sshClientConf, e = sshutils.CreateFromPrivateKeyFile(sshConf.User, sshConf.PrivateKeyFile, sshConf.Passphrase)
+			if e != nil {
+				logger.Panic(e)
+			}
+		}
+	}
+
+	var client *sshutils.Client
+	client, e = sshutils.Dial(sshConf.Address, sshClientConf)
+	banai.PanicOnError(e)
+
+	defer client.Close()
+
+	e = client.UploadFile(localFile, remoteFile)
+	banai.PanicOnError(e)
+
 }
 
-func downloadFile(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		var e error
-		var v otto.Value
+func downloadFile(sshConf shellutils.ShellSSHConfig, remoteFile string, localFile string) {
+	var e error
 
-		if len(call.ArgumentList) != 3 {
-			logger.Panic("Function parameters are sshOpt local file and remote file")
+	updateSSHConfigBySecret(banai, sshConf.SecretID, &sshConf)
+
+	if stat, e := os.Stat(remoteFile); e != nil {
+		logger.Panic("Failed to open local file", e)
+	} else {
+		if stat.IsDir() {
+			logger.Panic("Local file is directory", e)
 		}
+	}
 
-		v = call.ArgumentList[0]
-		if !v.IsObject() {
-			logger.Panic("Invalid ssh option variable")
-		}
-		var sshConf shellutils.ShellSSHConfig
-		if e = ottoutils.Val2Struct(v, &sshConf); e != nil {
-			logger.Panic("Invalid ssh option variable")
-		}
-		updateSSHConfigBySecret(b, sshConf.SecretID, &sshConf)
+	var sshClientConf *ssh.ClientConfig
 
-		var remoteFile string
-		v = call.ArgumentList[1]
-		if !v.IsString() {
-			logger.Panic("Local file not set")
+	if sshConf.Address == "" {
+		logger.Panic("sshConfig target host Address not set")
+	}
+	if sshConf.User == "" {
+		logger.Panic("sshConfig User not set")
+	}
 
-		}
-		remoteFile = v.String()
-
-		if stat, e := os.Stat(remoteFile); e != nil {
-			logger.Panic("Failed to open local file", e)
-		} else {
-			if stat.IsDir() {
-				logger.Panic("Local file is directory", e)
+	if sshConf.Password != "" {
+		sshClientConf = sshutils.CreateFromUserPassword(sshConf.User, sshConf.Password)
+	} else {
+		if sshConf.PrivateKeyFile != "" {
+			sshClientConf, e = sshutils.CreateFromPrivateKeyFile(sshConf.User, sshConf.PrivateKeyFile, sshConf.Passphrase)
+			if e != nil {
+				logger.Panic(e)
 			}
 		}
-
-		var localFile string
-		v = call.ArgumentList[2]
-		if !v.IsString() {
-			logger.Panic("Local file not set")
-
-		}
-		localFile = v.String()
-
-		var sshClientConf *ssh.ClientConfig
-
-		if sshConf.Address == "" {
-			logger.Panic("sshConfig target host Address not set")
-		}
-		if sshConf.User == "" {
-			logger.Panic("sshConfig User not set")
-		}
-
-		if sshConf.Password != "" {
-			sshClientConf = sshutils.CreateFromUserPassword(sshConf.User, sshConf.Password)
-		} else {
-			if sshConf.PrivateKeyFile != "" {
-				sshClientConf, e = sshutils.CreateFromPrivateKeyFile(sshConf.User, sshConf.PrivateKeyFile, sshConf.Passphrase)
-				if e != nil {
-					logger.Panic(e)
-				}
-			}
-		}
-
-		var client *sshutils.Client
-		client, e = sshutils.Dial(sshConf.Address, sshClientConf)
-		if e != nil {
-			logger.Panic(e)
-		}
-
-		defer client.Close()
-
-		e = client.Download(remoteFile, localFile)
-		if e != nil {
-			logger.Panic(e)
-		}
-
-		return otto.Value{}
 	}
+
+	var client *sshutils.Client
+	client, e = sshutils.Dial(sshConf.Address, sshClientConf)
+	if e != nil {
+		logger.Panic(e)
+	}
+
+	defer client.Close()
+
+	e = client.Download(remoteFile, localFile)
+	if e != nil {
+		logger.Panic(e)
+	}
+
 }
 
-func currentPath(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		s, err := os.Getwd()
-		if err == nil {
-			v, _ := call.Otto.ToValue(s)
-			return v
-		}
-		logger.Panic("Failed to get current working folder ", err)
-		return otto.Value{}
-	}
+func currentPath() string {
+	s, err := os.Getwd()
+	banai.PanicOnError(err)
+	return s
 }
 
-func changeDir(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 1 {
-			return otto.Value{}
-		}
-		err := os.Chdir(call.ArgumentList[0].String())
-		if err != nil {
-			logger.Panic("Failed to get current working folder ", err)
-		}
+func changeDir(dir string) {
+	banai.PanicOnError(os.Chdir(dir))
+}
 
-		return otto.Value{}
-	}
+func print(text ...interface{}) {
+	fmt.Print(text...)
+}
+
+func println(text ...interface{}) {
+	fmt.Println(text...)
 }
 
 //RegisterJSObjects registers Shell objects and functions
 func RegisterJSObjects(b *infra.Banai) {
+	banai = b
 	logger = b.Logger
-	b.Jse.Set("env", environments(b))
-	b.Jse.Set("pwd", currentPath(b))
-	b.Jse.Set("cd", changeDir(b))
-	b.Jse.Set("sh", shell(b))
-	b.Jse.Set("shScript", shellScript(b))
-	b.Jse.Set("rsh", remoteshell(b))
-	b.Jse.Set("shUpload", uploadFile(b))
-	b.Jse.Set("shDownload", downloadFile(b))
-}
 
-func exampleImplementation(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		return otto.Value{}
-	}
+	banai.Jse.GlobalObject().Set("shENV", envToMap())
+	banai.Jse.GlobalObject().Set("shPWD", currentPath)
+	banai.Jse.GlobalObject().Set("shCD", changeDir)
+	banai.Jse.GlobalObject().Set("sh", shell)
+	banai.Jse.GlobalObject().Set("shScript", shellScript)
+	banai.Jse.GlobalObject().Set("rsh", remoteshell)
+	banai.Jse.GlobalObject().Set("shUpload", uploadFile)
+	banai.Jse.GlobalObject().Set("shDownload", downloadFile)
+	banai.Jse.GlobalObject().Set("print", print)
+	banai.Jse.GlobalObject().Set("println", println)
 }

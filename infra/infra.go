@@ -2,12 +2,13 @@ package infra
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
+	"github.com/dop251/goja"
 	"github.com/google/uuid"
-	"github.com/robertkrimen/otto"
 	"github.com/sagiforbes/banai/utils/fsutils"
 	"github.com/sirupsen/logrus"
 )
@@ -17,7 +18,7 @@ var ErrSecretNotFound = errors.New("Secret not found")
 
 //Banai banai main struct
 type Banai struct {
-	Jse          *otto.Otto
+	Jse          *goja.Runtime
 	TmpDir       string
 	Logger       *logrus.Logger
 	stashFolder  string
@@ -29,12 +30,12 @@ type Banai struct {
 //NewBanai create new banai struct object
 func NewBanai() *Banai {
 	ret := &Banai{
-		Jse:     otto.New(),
+		Jse:     goja.New(),
 		Logger:  logrus.New(),
 		secrets: make(map[string]secretStruct),
 	}
+	ret.Jse.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 	ret.TmpDir, _ = filepath.Abs("./.banai")
-	ret.Jse.Interrupt = make(chan func(), 1)
 	ret.stashFolder = filepath.Join(ret.TmpDir, "stash")
 	ret.secretFolder = filepath.Join(ret.TmpDir, "sec")
 	os.RemoveAll(ret.stashFolder)
@@ -43,6 +44,24 @@ func NewBanai() *Banai {
 	os.MkdirAll(ret.secretFolder, 0700)
 
 	return ret
+}
+
+//PanicOnError return Value typed panic so javascript will get exception
+func (b Banai) PanicOnError(e error, t ...string) {
+	if e != nil {
+		var msg string
+		if t != nil {
+			msg = fmt.Sprintf("%s %s", t, e)
+			b.Logger.Error(msg)
+			panic(b.Jse.ToValue(msg))
+
+		} else {
+			msg = fmt.Sprint(e)
+			b.Logger.Error(msg)
+			panic(b.Jse.ToValue(msg))
+		}
+
+	}
 }
 
 //Close should be call at the end of using banai to remove all allocated resource during banai execution

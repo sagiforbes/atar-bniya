@@ -6,15 +6,16 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"hash"
 	"io"
 	"os"
 
-	"github.com/robertkrimen/otto"
 	"github.com/sagiforbes/banai/infra"
 	"github.com/sirupsen/logrus"
 )
 
+var banai *infra.Banai
 var logger *logrus.Logger
 
 func genericHashCalculator(hasher hash.Hash, src io.Reader) string {
@@ -23,163 +24,92 @@ func genericHashCalculator(hasher hash.Hash, src io.Reader) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func getFileFromCaller(call otto.FunctionCall) *os.File {
-	if len(call.ArgumentList) != 1 {
-		logger.Panic("No file to calc")
-	}
-	fileName := call.ArgumentList[0].String()
+func openFileForHash(fileName string) *os.File {
 	fi, err := os.Stat(fileName)
-	if err != nil {
-		logger.Panicf("Cannot calculate hash for %s %s", fileName, err)
-	}
+	banai.PanicOnError(err)
 	if !fi.Mode().IsRegular() {
-		logger.Panicf("Cannot calculate hash for %s", fileName)
+		banai.PanicOnError(fmt.Errorf("Cannot calculate hash for %s", fileName))
 	}
 	f, err := os.Open(fileName)
 	if err != nil {
-		logger.Panicf("Failed to open file %s, for reading: %e", fileName, err)
+		banai.PanicOnError(fmt.Errorf("Failed to open file %s, for reading: %e", fileName, err))
 	}
 
 	return f
 }
 
 //********************* MD5 *************************
-func hashMD5Buf(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 1 {
-			logger.Panic("No buffer to calculate")
-		}
-		val, _ := call.ArgumentList[0].Export()
-		bs, ok := val.([]byte)
-		if !ok {
-			logger.Panic("No buffer to calculate")
-		}
-		b := bytes.NewBuffer(bs)
-		v, _ := call.Otto.ToValue(genericHashCalculator(md5.New(), b))
-		return v
-	}
+func hashMD5Buf(bs []uint8) string {
+
+	b := bytes.NewBuffer(bs)
+	return genericHashCalculator(md5.New(), b)
 }
 
-func hashMD5Text(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 1 {
-			logger.Panic("No String to calculate")
-		}
+func hashMD5Text(s string) string {
+	b := bytes.NewBufferString(s)
+	return genericHashCalculator(md5.New(), b)
 
-		b := bytes.NewBufferString(call.ArgumentList[0].String())
-		v, _ := call.Otto.ToValue(genericHashCalculator(md5.New(), b))
-		return v
-	}
 }
 
-func hashMD5File(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		f := getFileFromCaller(call)
-		defer f.Close()
+func hashMD5File(fileName string) string {
+	f := openFileForHash(fileName)
+	defer f.Close()
 
-		v, _ := call.Otto.ToValue(genericHashCalculator(md5.New(), f))
-
-		return v
-	}
+	return genericHashCalculator(md5.New(), f)
 }
 
 //********************* SHA1 *************************
-func sha1Buf(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 1 {
-			logger.Panic("No buffer to calculate")
-		}
-		val, _ := call.ArgumentList[0].Export()
-		bs, ok := val.([]byte)
-		if !ok {
-			logger.Panic("No buffer to calculate")
-		}
-		b := bytes.NewBuffer(bs)
-		v, _ := call.Otto.ToValue(genericHashCalculator(sha1.New(), b))
-		return v
-	}
+func sha1Buf(bs []uint8) string {
+
+	b := bytes.NewBuffer(bs)
+	return genericHashCalculator(sha1.New(), b)
 }
 
-func sha1Text(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 1 {
-			logger.Panic("No String to calculate")
-		}
+func sha1Text(s string) string {
+	b := bytes.NewBufferString(s)
+	return genericHashCalculator(sha1.New(), b)
 
-		b := bytes.NewBufferString(call.ArgumentList[0].String())
-		v, _ := call.Otto.ToValue(genericHashCalculator(sha1.New(), b))
-		return v
-	}
 }
 
-func sha1File(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		f := getFileFromCaller(call)
-		defer f.Close()
+func sha1File(fileName string) string {
+	f := openFileForHash(fileName)
+	defer f.Close()
 
-		v, _ := call.Otto.ToValue(genericHashCalculator(sha1.New(), f))
-
-		return v
-	}
+	return genericHashCalculator(sha1.New(), f)
 }
 
 //********************* SHA256 *************************
-func sha256Buf(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 1 {
-			logger.Panic("No buffer to calculate")
-		}
-		val, _ := call.ArgumentList[0].Export()
-		bs, ok := val.([]byte)
-		if !ok {
-			logger.Panic("No buffer to calculate")
-		}
-		b := bytes.NewBuffer(bs)
-		v, _ := call.Otto.ToValue(genericHashCalculator(sha256.New(), b))
-		return v
-	}
+func sha256Buf(bs []uint8) string {
+
+	b := bytes.NewBuffer(bs)
+	return genericHashCalculator(sha256.New(), b)
 }
 
-func sha256Text(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) != 1 {
-			logger.Panic("No String to calculate")
-		}
+func sha256Text(s string) string {
+	b := bytes.NewBufferString(s)
+	return genericHashCalculator(sha256.New(), b)
 
-		b := bytes.NewBufferString(call.ArgumentList[0].String())
-		v, _ := call.Otto.ToValue(genericHashCalculator(sha256.New(), b))
-		return v
-	}
 }
 
-func sha256File(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		f := getFileFromCaller(call)
-		defer f.Close()
+func sha256File(fileName string) string {
+	f := openFileForHash(fileName)
+	defer f.Close()
 
-		v, _ := call.Otto.ToValue(genericHashCalculator(sha256.New(), f))
-
-		return v
-	}
+	return genericHashCalculator(sha256.New(), f)
 }
 
 //RegisterJSObjects registers Shell objects and functions
 func RegisterJSObjects(b *infra.Banai) {
+	banai = b
 	logger = b.Logger
-	b.Jse.Set("hashMd5File", hashMD5File(b))
-	b.Jse.Set("hashMd5Text", hashMD5Text(b))
-	b.Jse.Set("hashMd5Buffer", hashMD5Buf(b))
-	b.Jse.Set("hashSha1File", sha1File(b))
-	b.Jse.Set("hashSha1Text", sha1Text(b))
-	b.Jse.Set("hashSha1Buffer", sha1Buf(b))
-	b.Jse.Set("hashSha256File", sha256File(b))
-	b.Jse.Set("hashSha256Text", sha256Text(b))
-	b.Jse.Set("hashSha256Buffer", sha256Buf(b))
 
-}
-
-func exampleImplementation(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
-	return func(call otto.FunctionCall) otto.Value {
-		return otto.Value{}
-	}
+	banai.Jse.GlobalObject().Set("hashMd5File", hashMD5File)
+	banai.Jse.GlobalObject().Set("hashMd5Text", hashMD5Text)
+	banai.Jse.GlobalObject().Set("hashMd5Buffer", hashMD5Buf)
+	banai.Jse.GlobalObject().Set("hashSha1File", sha1File)
+	banai.Jse.GlobalObject().Set("hashSha1Text", sha1Text)
+	banai.Jse.GlobalObject().Set("hashSha1Buffer", sha1Buf)
+	banai.Jse.GlobalObject().Set("hashSha256File", sha256File)
+	banai.Jse.GlobalObject().Set("hashSha256Text", sha256Text)
+	banai.Jse.GlobalObject().Set("hashSha256Buffer", sha256Buf)
 }

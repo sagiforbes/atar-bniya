@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/robertkrimen/otto"
+	"github.com/dop251/goja"
 	"github.com/sagiforbes/banai/commands/archive"
 	"github.com/sagiforbes/banai/commands/fs"
 	hashImpl "github.com/sagiforbes/banai/commands/hash"
@@ -53,7 +53,7 @@ func runBuild(scriptFileName string, funcCalls []string, outputConsummer *chan s
 
 		go func() {
 			<-abort
-			b.Jse.Interrupt <- func() { panic("Abort execution") }
+			b.Jse.Interrupt("Abort execution")
 		}()
 		if scriptFileName == defaultScriptFileName {
 			_, err := os.Stat(scriptFileName)
@@ -61,46 +61,37 @@ func runBuild(scriptFileName string, funcCalls []string, outputConsummer *chan s
 				scriptFileName = defaultScriptFileName + ".js"
 			}
 		}
-		script, err := b.Jse.Compile(scriptFileName, loadScript(scriptFileName))
+		program, err := goja.Compile(scriptFileName, loadScript(scriptFileName), false)
 		if err != nil {
-			panic(fmt.Sprintln("Failed to compile script ", err))
+			panic(fmt.Sprintln("Failed to compile script ", scriptFileName, err))
 		}
-		_, err = b.Jse.Run(script)
-		if err != nil {
-			b.Logger.Panic("Error running script", err)
-		}
+
 		shell.RegisterJSObjects(b)
 		archive.RegisterJSObjects(b)
 		fs.RegisterJSObjects(b)
 		hashImpl.RegisterJSObjects(b)
 
+		runVal, err := b.Jse.RunProgram(program)
+
+		if err != nil {
+			b.Logger.Panic("Failed to run program", err)
+		}
+		b.Logger.Info("Programe run return value: ", runVal)
 		if len(funcCalls) > 0 {
-			var funcVal otto.Value
-			for _, f := range funcCalls {
-				funcVal, err = b.Jse.Get(f)
-				if err != nil || funcVal == otto.UndefinedValue() {
-					b.Logger.Error("Cannot execute finction", f, err)
-					panic(err)
-				} else {
-					b.Logger.Println("Executing", f)
-					_, err = funcVal.Call(funcVal)
-					if err != nil {
-						b.Logger.Panic("Failed when executing javascript ", err)
-					}
+			for _, fn := range funcCalls {
+				fnc, ok := goja.AssertFunction(b.Jse.Get(fn))
+				if !ok {
+					b.Logger.Panic(fmt.Errorf("function %s not found", fn))
 				}
+				fnc(goja.Undefined())
 			}
 
 		} else {
-			mainFunc, err := b.Jse.Get(mainFuncName)
-			if err != nil || mainFunc == otto.UndefinedValue() {
-				b.Logger.Warn("No main function defined")
-			} else {
-				b.Logger.Println("Starting", mainFuncName)
-				_, err := mainFunc.Call(mainFunc)
-				if err != nil {
-					b.Logger.Panic("Failed when executing javascript ", err)
-				}
+			mainFunc, ok := goja.AssertFunction(b.Jse.Get("main"))
+			if !ok {
+				b.Logger.Panic("main function not found")
 			}
+			mainFunc(goja.Undefined())
 
 		}
 	}()

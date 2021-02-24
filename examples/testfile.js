@@ -123,9 +123,9 @@ function hashExample() {
 }
 
 function main() {
-    //localScripts()
-    //remoteCommands()
-    //fileExamples()
-    // zipExample()
+    localScripts()
+    remoteCommands()
+    fileExamples()
+    zipExample()
     hashExample()
 }

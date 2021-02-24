@@ -210,6 +210,10 @@ func println(text ...interface{}) {
 	fmt.Println(text...)
 }
 
+func exit(code int) {
+	banai.Jse.Interrupt(code)
+}
+
 //RegisterJSObjects registers Shell objects and functions
 func RegisterJSObjects(b *infra.Banai) {
 	banai = b
@@ -225,4 +229,5 @@ func RegisterJSObjects(b *infra.Banai) {
 	banai.Jse.GlobalObject().Set("shDownload", downloadFile)
 	banai.Jse.GlobalObject().Set("print", print)
 	banai.Jse.GlobalObject().Set("println", println)
+	banai.Jse.GlobalObject().Set("exit", exit)
 }

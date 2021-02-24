@@ -21,10 +21,12 @@ type ShellResult struct {
 
 //CommandOptions how to run the a shell command
 type CommandOptions struct {
-	Shell   string   `json:"shell,omitempty"`
-	In      string   `json:"in,omitempty"`
-	Ins     []string `json:"ins,omitempty"`
-	Timeout int      `json:"timeout,omitempty"`
+	Shell    string   `json:"shell,omitempty"`
+	In       string   `json:"in,omitempty"`
+	Ins      []string `json:"ins,omitempty"`
+	Env      []string `json:"env,omitempty"`
+	Timeout  int      `json:"timeout,omitempty"`
+	SecretID string   `json:"secretId,omitempty"`
 }
 
 //DefaultBashCommandOptions default for running with bash
@@ -38,6 +40,11 @@ func DefaultBashCommandOptions() CommandOptions {
 func RunShellCommand(commandToRun string, cmdOpt ...CommandOptions) (*ShellResult, error) {
 	if cmdOpt == nil {
 		cmdOpt = []CommandOptions{DefaultBashCommandOptions()}
+	} else {
+		if cmdOpt[0].Shell == "" {
+			cmdOpt[0].Shell = "/bin/bash"
+		}
+
 	}
 
 	var finalCommand = make([]string, 0)
@@ -57,6 +64,9 @@ func RunShellCommand(commandToRun string, cmdOpt ...CommandOptions) (*ShellResul
 	}
 
 	command.Env = append(command.Env, os.Environ()...)
+	if cmdOpt[0].Env != nil {
+		command.Env = append(command.Env, cmdOpt[0].Env...)
+	}
 
 	cmdStdOutPipe, _ := command.StdoutPipe()
 	cmdStdErrPipe, _ := command.StderrPipe()
@@ -111,6 +121,7 @@ type ShellSSHConfig struct {
 	Password       string `json:"password,omitempty"`
 	PrivateKeyFile string `json:"privateKeyFile,omitempty"`
 	Passphrase     string `json:"passphrase,omitempty"`
+	SecretID       string `json:"secretId,omitempty"`
 }
 
 //RunRemoteShell execute a command on remote shell

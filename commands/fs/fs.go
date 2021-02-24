@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/robertkrimen/otto"
+	"github.com/sagiforbes/banai/infra"
 	"github.com/sagiforbes/banai/utils/fsutils"
 	"github.com/sagiforbes/banai/utils/shellutils"
 	"github.com/sirupsen/logrus"
@@ -28,7 +29,7 @@ func readFileContent(fileName string) ([]byte, error) {
 
 }
 
-func readFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func readFile(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 1 {
 			logger.Panic("Must have name of file")
@@ -42,12 +43,12 @@ func readFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 
 		var v otto.Value
 		if !utf8.Valid(b) {
-			v, err = vm.ToValue(b)
+			v, err = call.Otto.ToValue(b)
 			if err != nil {
 				logger.Panic(err)
 			}
 		} else {
-			v, err = vm.ToValue(string(b))
+			v, err = call.Otto.ToValue(string(b))
 			if err != nil {
 				logger.Panic(err)
 			}
@@ -57,7 +58,7 @@ func readFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	}
 }
 
-func writeFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func writeFile(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 2 {
 			logger.Panic("Must have file name and file content")
@@ -89,7 +90,7 @@ func writeFile(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	}
 }
 
-func createDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func createDir(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 1 {
 			logger.Panic("Name of dir not set")
@@ -114,7 +115,7 @@ func createDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	}
 }
 
-func fsRemoveDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func fsRemoveDir(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) < 1 {
 			logger.Panic("Name of element to remove not set")
@@ -131,7 +132,7 @@ func fsRemoveDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	}
 }
 
-func fsRemove(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func fsRemove(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) < 1 {
 			logger.Panic("Name of element to remove not set")
@@ -183,7 +184,7 @@ func copyFiles(sourceFileName, destinationFileName string) error {
 	return err
 }
 
-func fsCopy(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func fsCopy(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 2 {
 			logger.Panic("copy must have two parameters, source and destination")
@@ -201,7 +202,7 @@ func fsCopy(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	}
 }
 
-func fsMove(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func fsMove(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 2 {
 			logger.Panic("Move must have two parameters, source and destination")
@@ -229,11 +230,11 @@ type splitPathNameParts struct {
 	Ext    string `json:"ext,omitempty"`
 }
 
-func splitPathNameComponents(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func splitPathNameComponents(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		var v otto.Value
 		if len(call.ArgumentList) != 1 {
-			v, _ = vm.ToValue(splitPathNameParts{})
+			v, _ = call.Otto.ToValue(splitPathNameParts{})
 			return v
 		}
 		v = call.ArgumentList[0]
@@ -256,17 +257,17 @@ func splitPathNameComponents(vm *otto.Otto) func(call otto.FunctionCall) otto.Va
 			ret.Title = ret.File
 		}
 
-		v, _ = vm.ToValue(ret)
+		v, _ = call.Otto.ToValue(ret)
 
 		return v
 	}
 }
 
-func joinPathParts(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func joinPathParts(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		var v otto.Value
 		if len(call.ArgumentList) < 1 {
-			v, _ = vm.ToValue("")
+			v, _ = call.Otto.ToValue("")
 			return v
 		}
 
@@ -274,13 +275,13 @@ func joinPathParts(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 		for i, arg := range call.ArgumentList {
 			parts[i], _ = arg.ToString()
 		}
-		v, _ = vm.ToValue(filepath.Join(parts...))
+		v, _ = call.Otto.ToValue(filepath.Join(parts...))
 
 		return v
 	}
 }
 
-func listAllSubitemsInDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func listAllSubitemsInDir(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		var rootFolder = "."
 		var itemType = ""
@@ -329,16 +330,16 @@ func listAllSubitemsInDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value
 		if err != nil {
 			logger.Panicf("Failed to list folder %s, %s", rootFolder, err)
 		}
-		v, _ = vm.ToValue(ret)
+		v, _ = call.Otto.ToValue(ret)
 		return v
 	}
 }
 
-func absoluteFolder(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func absoluteFolder(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		var v otto.Value
 		if len(call.ArgumentList) != 1 {
-			v, _ = vm.ToValue("")
+			v, _ = call.Otto.ToValue(".")
 			return v
 		}
 
@@ -346,17 +347,17 @@ func absoluteFolder(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 		if err != nil {
 			logger.Panic("Failed to calculate absolute path: ", err)
 		}
-		v, _ = vm.ToValue(s)
+		v, _ = call.Otto.ToValue(s)
 
 		return v
 	}
 }
 
-func currentPath(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func currentPath(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		s, err := os.Getwd()
 		if err == nil {
-			v, _ := vm.ToValue(s)
+			v, _ := call.Otto.ToValue(s)
 			return v
 		}
 		logger.Panic("Failed to get current working folder ", err)
@@ -364,7 +365,7 @@ func currentPath(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	}
 }
 
-func changeDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func changeDir(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 1 {
 			return otto.Value{}
@@ -378,25 +379,25 @@ func changeDir(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 	}
 }
 
-//RegisterObjects registers fs objects and functions
-func RegisterObjects(vm *otto.Otto, lgr *logrus.Logger) {
-	logger = lgr
-	vm.Set("fsRead", readFile(vm))
-	vm.Set("fsWrite", writeFile(vm))
-	vm.Set("fsCreateDir", createDir(vm))
-	vm.Set("fsRemoveDir", fsRemoveDir(vm))
-	vm.Set("fsRemove", fsRemove(vm))
-	vm.Set("fsCopy", fsCopy(vm))
-	vm.Set("fsMove", fsMove(vm))
-	vm.Set("fsSplit", splitPathNameComponents(vm))
-	vm.Set("fsJoin", joinPathParts(vm))
-	vm.Set("fsList", listAllSubitemsInDir(vm))
-	vm.Set("fsAbs", absoluteFolder(vm))
-	vm.Set("fsPwd", currentPath(vm))
-	vm.Set("fsChdir", changeDir(vm))
+//RegisterJSObjects registers fs objects and functions
+func RegisterJSObjects(b *infra.Banai) {
+	logger = b.Logger
+	b.Jse.Set("fsRead", readFile(b))
+	b.Jse.Set("fsWrite", writeFile(b))
+	b.Jse.Set("fsCreateDir", createDir(b))
+	b.Jse.Set("fsRemoveDir", fsRemoveDir(b))
+	b.Jse.Set("fsRemove", fsRemove(b))
+	b.Jse.Set("fsCopy", fsCopy(b))
+	b.Jse.Set("fsMove", fsMove(b))
+	b.Jse.Set("fsSplit", splitPathNameComponents(b))
+	b.Jse.Set("fsJoin", joinPathParts(b))
+	b.Jse.Set("fsList", listAllSubitemsInDir(b))
+	b.Jse.Set("fsAbs", absoluteFolder(b))
+	b.Jse.Set("fsPwd", currentPath(b))
+	b.Jse.Set("fsChdir", changeDir(b))
 }
 
-func exampleImplementation(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func exampleImplementation(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		return otto.Value{}
 	}

@@ -8,11 +8,10 @@ import (
 
 	"github.com/robertkrimen/otto"
 	"github.com/sagiforbes/banai/commands/archive"
-
 	"github.com/sagiforbes/banai/commands/fs"
 	hashImpl "github.com/sagiforbes/banai/commands/hash"
 	"github.com/sagiforbes/banai/commands/shell"
-	"github.com/sirupsen/logrus"
+	"github.com/sagiforbes/banai/infra"
 )
 
 const (
@@ -37,25 +36,24 @@ func runBuild(scriptFileName string, funcCalls []string, outputConsummer *chan s
 	abort = make(chan bool)
 	done = make(chan bool)
 
-	var logger *logrus.Logger = logrus.New()
+	var b = infra.NewBanai()
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
 				if outputConsummer != nil {
 					*outputConsummer <- fmt.Sprint(err)
 				}
-				logger.Error(err)
-				logger.Error("Script execution exit with error !!!!!")
+				b.Logger.Error(err)
+				b.Logger.Error("Script execution exit with error !!!!!")
 			}
-
+			b.Close()
 			done <- true
 
 		}()
-		vm := otto.New()
-		vm.Interrupt = make(chan func(), 1)
+
 		go func() {
 			<-abort
-			vm.Interrupt <- func() { panic("Abort execution") }
+			b.Jse.Interrupt <- func() { panic("Abort execution") }
 		}()
 		if scriptFileName == defaultScriptFileName {
 			_, err := os.Stat(scriptFileName)
@@ -63,44 +61,44 @@ func runBuild(scriptFileName string, funcCalls []string, outputConsummer *chan s
 				scriptFileName = defaultScriptFileName + ".js"
 			}
 		}
-		script, err := vm.Compile(scriptFileName, loadScript(scriptFileName))
+		script, err := b.Jse.Compile(scriptFileName, loadScript(scriptFileName))
 		if err != nil {
 			panic(fmt.Sprintln("Failed to compile script ", err))
 		}
-		_, err = vm.Run(script)
+		_, err = b.Jse.Run(script)
 		if err != nil {
-			logger.Panic("Error running script", err)
+			b.Logger.Panic("Error running script", err)
 		}
-		shell.RegisterObjects(vm, logger)
-		archive.RegisterObjects(vm, logger)
-		fs.RegisterObjects(vm, logger)
-		hashImpl.RegisterObjects(vm, logger)
+		shell.RegisterJSObjects(b)
+		archive.RegisterJSObjects(b)
+		fs.RegisterJSObjects(b)
+		hashImpl.RegisterJSObjects(b)
 
 		if len(funcCalls) > 0 {
 			var funcVal otto.Value
 			for _, f := range funcCalls {
-				funcVal, err = vm.Get(f)
+				funcVal, err = b.Jse.Get(f)
 				if err != nil || funcVal == otto.UndefinedValue() {
-					logger.Error("Cannot execute finction", f, err)
+					b.Logger.Error("Cannot execute finction", f, err)
 					panic(err)
 				} else {
-					logger.Println("Executing", f)
+					b.Logger.Println("Executing", f)
 					_, err = funcVal.Call(funcVal)
 					if err != nil {
-						logger.Panic("Failed when executing javascript ", err)
+						b.Logger.Panic("Failed when executing javascript ", err)
 					}
 				}
 			}
 
 		} else {
-			mainFunc, err := vm.Get(mainFuncName)
+			mainFunc, err := b.Jse.Get(mainFuncName)
 			if err != nil || mainFunc == otto.UndefinedValue() {
-				logger.Warn("No main function defined")
+				b.Logger.Warn("No main function defined")
 			} else {
-				logger.Println("Starting", mainFuncName)
+				b.Logger.Println("Starting", mainFuncName)
 				_, err := mainFunc.Call(mainFunc)
 				if err != nil {
-					logger.Panic("Failed when executing javascript ", err)
+					b.Logger.Panic("Failed when executing javascript ", err)
 				}
 			}
 

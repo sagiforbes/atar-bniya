@@ -4,9 +4,25 @@ function printOut() {
 
 function localScripts() {
     //---------- local script
-    res = sh('ls -l')
-    console.log(JSON.stringify(res))
-    
+    var opt = {
+        shell: "",
+        in: "",
+        ins: [],
+        env: ["ENV1=VAL1", "ENV2=VAL2"],
+        timeout: 0,
+        secretId: ""
+    }
+    res = sh('env', opt)
+    var lines = res.out.split("\n")
+    for (var s = 0; s < lines.length; s++) {
+        console.log(lines[s])
+    }
+
+    res = shScript("examples/text.sh")
+    var lines = res.out.split("\n")
+    for (var s = 0; s < lines.length; s++) {
+        console.log(lines[s])
+    }
 }
 
 
@@ -18,9 +34,9 @@ function remoteCommands() {
         privateKeyFile: '/home/sagi/.ssh/foodsager.pem'
     }
     console.log("copy file to remote")
-    shUpload(sshConf, "examples/banaifile.js", "b.js")
+    shUpload(sshConf, "examples/testfile.js", "b.js")
 
-    
+
     console.log("Running ls on remote")
     res = rsh(sshConf, 'ls -l')
     console.log('stdout: ', res.out)
@@ -51,18 +67,18 @@ function fileExamples() {
     var res = fsSplit(finalFile)
     console.log("Path", finalFile, "Parts are:", JSON.stringify(res))
 
-    console.log("Join back ",fsJoin(res.folder,res.file))
+    console.log("Join back ", fsJoin(res.folder, res.file))
 
-    res=fsList("dump")
+    res = fsList("dump")
     console.log("Content of dump:", res)
 
-    res=fsList("dump","f")
+    res = fsList("dump", "f")
     console.log("Only files in dump:", res)
-    
-    res=fsList("dump","d")
+
+    res = fsList("dump", "d")
     console.log("Only sub directories in dump:", res)
 
-    console.log("Absolute path of ", finalFile,"is",fsAbs(finalFile))
+    console.log("Absolute path of ", finalFile, "is", fsAbs(finalFile))
 }
 
 function zipExample() {
@@ -72,26 +88,26 @@ function zipExample() {
     arUnzip("dump-out/dump.zip", "dump-out")
 }
 
-function dockerExample(){
+function dockerExample() {
     console.log(JSON.stringify(dkrList()))
     dkrStop("2b7d9e6c9a89e3ad86600ad36c823f8e13b9d36e637cbdcb676371c6c2ce5f75")
-    
+
 }
 
-function hashExample(){
-    console.log("MD5 of banai file: ",hashMd5File('examples/banaifile.js'))
-    console.log("MD5 of text: ",hashMd5Text('line123'))
-    console.log("SHA1 of banai file: ",hashSha1File('examples/banaifile.js'))
-    console.log("SHA1 of text: ",hashSha1Text('line123'))
-    console.log("SHA256 of banai file: ",hashSha256File('examples/banaifile.js'))
-    console.log("SHA256 of text: ",hashSha256Text('line123'))
+function hashExample() {
+    console.log("MD5 of banai file: ", hashMd5File('examples/banaifile.js'))
+    console.log("MD5 of text: ", hashMd5Text('line123'))
+    console.log("SHA1 of banai file: ", hashSha1File('examples/banaifile.js'))
+    console.log("SHA1 of text: ", hashSha1Text('line123'))
+    console.log("SHA256 of banai file: ", hashSha256File('examples/banaifile.js'))
+    console.log("SHA256 of text: ", hashSha256Text('line123'))
 }
 
 function main() {
     console.log("DESKTOP_SESSION, as key, value is: ", env['DESKTOP_SESSION'])
 
     localScripts()
-    //remoteCommands()
+    remoteCommands()
     //fileExamples()
     //zipExample()
     //dockerExample()

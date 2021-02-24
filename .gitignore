@@ -5,3 +5,4 @@ server/server
 banai
 dump/
 dump-out/
+go.sum

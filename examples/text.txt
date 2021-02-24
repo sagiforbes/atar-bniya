@@ -1,7 +1,0 @@
-This is a text file
-
-
-line 4
-
-
-end

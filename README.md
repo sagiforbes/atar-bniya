@@ -310,6 +310,7 @@ rsh(sshConf,cmd)
   password: "password", //If using user name and password, this would be the password to login to the remote server
   privateKeyFile: "~/.ssh/pc.pem", //Name of private key file
   passphrase: "some passphrase"// If the private key is protected by a passphrase than this field must be set
+  secretId: "Banai managed Secret id value"
 }
 ```
 - __cmd__ = The command to run on the remote server
@@ -339,6 +340,36 @@ sh(cmd,opt)
    "in": "single line", //A single line to pass to stdin, if the command needs one
    "ins": ["Line 1","Line 2"], // Multi lines to pass to stdin. Line per element in array
    "timeout": 10 // Timeout in seconds. After this time the command execution is terminated
+   "secretId": "Banai managed secret ID" //
+}
+```
+
+#### Result
+The command returns an object with these fields:
+```javascript
+{
+   "code" : 0, //The exit code of the shell script
+   "out" : "output text", //text from stdout of the command, if any.
+   "err" : "stderr text" //text from stderr of the command, if any.
+}
+```
+
+---
+
+### shScript
+Execute a shell script. It uses /bin/bash as default.
+#### Synopsis
+shScript(scriptFileName,opt)
+
+- _cmd_ - Text of the command line to run
+- _opt_ - Object with this fields:
+```javascript
+{
+   "shell": "/bin/bash",  //Alternative to /bin/bash
+   "in": "single line", //A single line to pass to stdin, if the command needs one
+   "ins": ["Line 1","Line 2"], // Multi lines to pass to stdin. Line per element in array
+   "timeout": 10 // Timeout in seconds. After this time the command execution is terminated
+   "secretId": "Banai managed secret ID" //
 }
 ```
 

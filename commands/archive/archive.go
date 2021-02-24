@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/robertkrimen/otto"
+	"github.com/sagiforbes/banai/infra"
 	"github.com/sagiforbes/banai/utils/fsutils"
 	"github.com/sirupsen/logrus"
 )
@@ -26,7 +27,7 @@ func discoverFilesInFolder(folderPath string) []string {
 	return files
 }
 
-func archiveToZip(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func archiveToZip(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 
 		if len(call.ArgumentList) != 2 {
@@ -49,12 +50,12 @@ func archiveToZip(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 			logger.Panic("Fialed to zip folder: %s, %s", sourcePath, err)
 		}
 		logger.Infof("Zipped files: %v", zippedFiles)
-		v, _ = vm.ToValue(zippedFiles)
+		v, _ = call.Otto.ToValue(zippedFiles)
 		return v
 	}
 }
 
-func unarchiveFromZip(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func unarchiveFromZip(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) != 2 {
 			logger.Panic("unzip Should have two parameters. The first is the name of the zip to extract, The seconds is the destination folder.")
@@ -78,20 +79,20 @@ func unarchiveFromZip(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
 
 		logger.Infof("Unzipped files %v", fileList)
 
-		v, _ = vm.ToValue(fileList)
+		v, _ = call.Otto.ToValue(fileList)
 		return v
 	}
 
 }
 
-//RegisterObjects register archive objects
-func RegisterObjects(vm *otto.Otto, lgr *logrus.Logger) {
-	logger = lgr
-	vm.Set("arZip", archiveToZip(vm))
-	vm.Set("arUnzip", unarchiveFromZip(vm))
+//RegisterJSObjects register archive objects
+func RegisterJSObjects(b *infra.Banai) {
+	logger = b.Logger
+	b.Jse.Set("arZip", archiveToZip(b))
+	b.Jse.Set("arUnzip", unarchiveFromZip(b))
 }
 
-func exampleImplementation(vm *otto.Otto) func(call otto.FunctionCall) otto.Value {
+func exampleImplementation(b *infra.Banai) func(call otto.FunctionCall) otto.Value {
 	return func(call otto.FunctionCall) otto.Value {
 		return otto.Value{}
 	}

@@ -12,7 +12,7 @@ function localScripts() {
         timeout: 0,
         secretId: ""
     }
-    println("DESKTOP_SESSION value is: ", shENV['DESKTOP_SESSION'])
+    println("DESKTOP_SESSION value is: ", env['DESKTOP_SESSION'])
     res = sh('env', opt)
     var lines = res.out.split("\n")
     for (var s = 0; s < lines.length; s++) {
@@ -25,24 +25,24 @@ function localScripts() {
         println(lines[s])
     }
 
-    println(shPWD())
+    println(pwd())
     try{
-        shCD("asdasd")
+        cd("asdasd")
     }catch(err){
         println("At catch")
         println("Failed to change directoy",err)
     }
 
     try{
-        shCD("dump")
+        cd("dump")
     }catch(err){
         println("At catch")
         println("Failed to change directoy",err)
     }
     
-    println(shPWD())
-    shCD("..")
-    println(shPWD())
+    println(pwd())
+    cd("..")
+    println(pwd())
 
 }
 

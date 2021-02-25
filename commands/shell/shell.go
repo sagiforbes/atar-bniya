@@ -219,9 +219,9 @@ func RegisterJSObjects(b *infra.Banai) {
 	banai = b
 	logger = b.Logger
 
-	banai.Jse.GlobalObject().Set("shENV", envToMap())
-	banai.Jse.GlobalObject().Set("shPWD", currentPath)
-	banai.Jse.GlobalObject().Set("shCD", changeDir)
+	banai.Jse.GlobalObject().Set("env", envToMap())
+	banai.Jse.GlobalObject().Set("pwd", currentPath)
+	banai.Jse.GlobalObject().Set("cd", changeDir)
 	banai.Jse.GlobalObject().Set("sh", shell)
 	banai.Jse.GlobalObject().Set("shScript", shellScript)
 	banai.Jse.GlobalObject().Set("rsh", remoteshell)

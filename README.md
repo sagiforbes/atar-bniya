@@ -327,6 +327,92 @@ Return an object with the execution result
 
 ---
 
+## Http client
+You can easly make http client request to a server. You can pass the url to the site, custome headers and cookies. If an error occurs an exception is thrown. 
+
+You can pass options (not mandatory) to each request. Options field is:
+```
+{
+  ignoreHttpsChecks: false, //Set to true (default) if you want to ignore checks on the https certificate. If set to false, client will fail on self signed certificate
+  allowRedirect: false, //Follow redirect return from the server. Setting this field to false will not allow redirect (default is true).
+  timeout: 10, // Send to complete the request. Set to zero (default) to never timeout
+  herader: {"hdr1":["val1"]}, //Object containing array of strings to be set as the request header.
+  cookies: [{}], //Array of cookie information
+  contentType: "json", A shortcut to set the request "Content-Type". Possible values: "json"
+  Accept:"json", A short cut to set the accept header. Possible values: "json","bin","text", default is json
+}
+```
+
+
+If all is ok you get respons object with the following fields:
+```
+{
+  "status": 200, // Http status code
+  "rawBody": [64,13...], //If respond had a body. Than this is its raw representation as byte array
+  "body" : any, //The parsed body
+  "header": {"hdr1":"val1"}, //An object with field and value of the headers.
+  "cookies": []{"Name": "value"} //cookie information
+}
+```
+
+When aresponse had a body, Banai will try to parse the body. First as a string, then as a JSON. If its a json than body is the object of the json (or array). If it could not parse the respond as a json than body is the string, returned from the server. If the body of the respond was a byte array than body will hold a byte array (same as the rawBody)
+
+These are the supported REST calls by Banai:
+
+### httpGet 
+Make a get request. No body is passed
+
+#### Synopsis
+httpGet(urlPath,opt)
+
+---
+
+### httpPost
+make a post request. Passing the body as string or array of bytes
+#### Synopsis
+httpPost(urlPath,body,opt)
+
+---
+
+### httpPut
+make a put request. Passing the body as string or array of bytes
+#### Synopsis
+httpPut(urlPath,body,opt)
+
+---
+
+### httpPatch
+make a patch request. Passing the body as string or array of bytes
+#### Synopsis
+httpPatch(urlPath,body,opt)
+
+---
+
+
+### httpDelete
+make a delete request. Passing the body as string or array of bytes
+#### Synopsis
+httpDelete(urlPath,body,opt)
+
+I had decided to allow body to delete request, because the standart is not clear about this.
+
+---
+
+### httpOptions
+make a options request.
+#### Synopsis
+httpOptions(urlPath,opt)
+
+---
+
+### httpHead
+make a head request.
+#### Synopsis
+httpHead(urlPath,opt)
+
+---
+
+
 ### sh
 Execute a shell command. It uses /bin/bash as default.
 #### Synopsis

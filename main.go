@@ -10,6 +10,7 @@ import (
 	"github.com/sagiforbes/banai/commands/archive"
 	"github.com/sagiforbes/banai/commands/fs"
 	hashImpl "github.com/sagiforbes/banai/commands/hash"
+	"github.com/sagiforbes/banai/commands/httpclient"
 	"github.com/sagiforbes/banai/commands/shell"
 	"github.com/sagiforbes/banai/infra"
 )
@@ -70,6 +71,7 @@ func runBuild(scriptFileName string, funcCalls []string, outputConsummer *chan s
 		archive.RegisterJSObjects(b)
 		fs.RegisterJSObjects(b)
 		hashImpl.RegisterJSObjects(b)
+		httpclient.RegisterJSObjects(b)
 
 		runVal, err := b.Jse.RunProgram(program)
 

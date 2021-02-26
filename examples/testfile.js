@@ -122,10 +122,32 @@ function hashExample() {
     println("SHA256 of text: ", hashSha256Text('line123'))
 }
 
+function testRest(){
+    var opt={
+        ContentType: "json"
+    }
+    var res=httpPost("https://ptsv2.com/t/dg1g3-1614349524/post",JSON.stringify({"fld":"Sagi"},opt))
+    println("Status ",res.status)
+    println("Content=",res.body)
+    
+    
+    
+    res=httpPostForm("https://ptsv2.com/t/dg1g3-1614349524/post",{"fld1":"sagi"},{"file":"examples/text.sh"})
+    println("Status ",res.status)
+    println("Content=",res.body)
+
+    res=httpPostForm("https://ptsv2.com/t/dg1g3-1614349524/post",{"fld2":"sagi2"})
+    println("Status ",res.status)
+    println("Content=",res.body)
+   
+    
+}
+
 function main() {
-    localScripts()
-    remoteCommands()
-    fileExamples()
-    zipExample()
-    hashExample()
+    // localScripts()
+    // remoteCommands()
+    // fileExamples()
+    // zipExample()
+    // hashExample()
+    testRest()
 }

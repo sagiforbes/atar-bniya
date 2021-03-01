@@ -108,7 +108,7 @@ func remoteshell(sshConf shellutils.ShellSSHConfig, cmd string) *shellutils.Shel
 	return ret
 }
 
-func uploadFile(sshConf shellutils.ShellSSHConfig, localFile, remoteFile string) {
+func sshUploadFile(sshConf shellutils.ShellSSHConfig, localFile, remoteFile string) {
 	var e error
 
 	updateSSHConfigBySecret(banai, sshConf.SecretID, &sshConf)
@@ -144,7 +144,7 @@ func uploadFile(sshConf shellutils.ShellSSHConfig, localFile, remoteFile string)
 
 }
 
-func downloadFile(sshConf shellutils.ShellSSHConfig, remoteFile string, localFile string) {
+func sshDownloadFile(sshConf shellutils.ShellSSHConfig, remoteFile string, localFile string) {
 	var e error
 
 	updateSSHConfigBySecret(banai, sshConf.SecretID, &sshConf)
@@ -225,8 +225,8 @@ func RegisterJSObjects(b *infra.Banai) {
 	banai.Jse.GlobalObject().Set("sh", shell)
 	banai.Jse.GlobalObject().Set("shScript", shellScript)
 	banai.Jse.GlobalObject().Set("rsh", remoteshell)
-	banai.Jse.GlobalObject().Set("shUpload", uploadFile)
-	banai.Jse.GlobalObject().Set("shDownload", downloadFile)
+	banai.Jse.GlobalObject().Set("shUpload", sshUploadFile)
+	banai.Jse.GlobalObject().Set("shDownload", sshDownloadFile)
 	banai.Jse.GlobalObject().Set("print", print)
 	banai.Jse.GlobalObject().Set("println", println)
 	banai.Jse.GlobalObject().Set("exit", exit)

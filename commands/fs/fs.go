@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/dop251/goja"
@@ -21,10 +22,10 @@ var banai *infra.Banai
 func readFileContent(fileName string) ([]byte, error) {
 	info, err := os.Stat(fileName)
 	if err != nil {
-		banai.Logger.Panic("Error reading", fileName, err)
+		banai.Logger.Panicf("Error reading %s, %s", fileName, err)
 	}
 	if info.IsDir() {
-		banai.Logger.Panic("file", fileName, "Is a directory")
+		banai.Logger.Panicf("file %s is a directory", fileName)
 	}
 	return ioutil.ReadFile(fileName)
 
@@ -187,12 +188,12 @@ func splitPathNameComponents(pathName string) splitPathNameParts {
 	return ret
 }
 
-func joinPathParts(parts []string) string {
+func joinPathParts(parts ...string) string {
 	s := filepath.Join(parts...)
 	return s
 }
 
-func listAllSubitemsInDir(root string, t []string) []string {
+func listAllSubitemsInDir(root string, elementType ...string) []string {
 	var rootFolder = "."
 	var itemType = ""
 
@@ -200,8 +201,8 @@ func listAllSubitemsInDir(root string, t []string) []string {
 		rootFolder = root
 	}
 
-	if t != nil && len(t) > 0 {
-		switch t[0] {
+	if elementType != nil && len(elementType) > 0 {
+		switch elementType[0] {
 		case "f":
 			itemType = "f"
 		case "d":
@@ -259,6 +260,26 @@ func changeDir(dir string) {
 	banai.PanicOnError(os.Chdir(dir))
 }
 
+type fileInfo struct {
+	IsDir        bool      `json:"isDir,omitempty"`
+	IsFile       bool      `json:"isFile,omitempty"`
+	Size         int64     `json:"size,omitempty"`
+	LastModified time.Time `json:"lastModified,omitempty"`
+}
+
+func fsItemInfo(itemPath string) fileInfo {
+	fs, err := os.Stat(itemPath)
+	banai.PanicOnError(err)
+	ret := fileInfo{
+		IsDir:        fs.IsDir(),
+		IsFile:       fs.Mode().IsRegular(),
+		Size:         fs.Size(),
+		LastModified: fs.ModTime(),
+	}
+
+	return ret
+}
+
 //RegisterJSObjects registers fs objects and functions
 func RegisterJSObjects(b *infra.Banai) {
 	banai = b
@@ -276,4 +297,6 @@ func RegisterJSObjects(b *infra.Banai) {
 	banai.Jse.GlobalObject().Set("fsAbs", absoluteFolder)
 	banai.Jse.GlobalObject().Set("fsPwd", currentPath)
 	banai.Jse.GlobalObject().Set("fsChdir", changeDir)
+	banai.Jse.GlobalObject().Set("fsItemInfo", fsItemInfo)
+
 }

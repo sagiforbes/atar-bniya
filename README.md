@@ -58,6 +58,8 @@ list of files that were unzipped
 
 ## File system methods
 
+These method are intended to ease the use of the standart file system API. Obviosly a shell has more options than this group of methods functions. However, these functions has some nice shortcuts or easier interface to run the basic fs functionality
+
 ### fsCreateDir
 Create a folder and all its subfolders
 #### Synopsis
@@ -141,6 +143,28 @@ String of the absolute file name
 fsChdir Change current working dir
 #### Synopsis
 fsChdir(pathName)
+
+---
+
+### fsItemInfo
+fsItemInfo return some information about a file or dir on the local fs. This method throws an exception if item not found
+
+#### Synopsis
+fsItemInfo("item name")
+
+#### result
+Return an object of 
+```javascript
+{
+  isDir: false, //true if item is a folder
+  isFile: false, //true if item is a file
+  size: 123,  //Size of file
+  lastModified: "2021-02-27T20:41:15.48840533+02:00" //Last modified time, as returned by of OS
+
+}
+```
+
+If item was not found, an exception is thrown
 
 ---
 

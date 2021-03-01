@@ -86,12 +86,12 @@ func loadSecrets(secretsFile string, b *infra.Banai) (err error) {
 	return
 }
 
-func runBuild(scriptFileName string, funcCalls []string, secretsFile string) (done chan bool, abort chan bool, startErr error) {
+func runBuild(scriptFileName string, funcCalls []string, secretsFile string) (done chan goja.Value, abort chan bool, startErr error) {
 	abort = make(chan bool)
-	done = make(chan bool)
+	done = make(chan goja.Value)
 
 	var b = infra.NewBanai()
-
+	var runReturnedValue goja.Value
 	b.PanicOnError(loadSecrets(secretsFile, b))
 	//--------- go routin for reporting log out an
 	go func() {
@@ -101,7 +101,7 @@ func runBuild(scriptFileName string, funcCalls []string, secretsFile string) (do
 				b.Logger.Error("Script execution exit with error !!!!!")
 			}
 			b.Close()
-			done <- true
+			done <- runReturnedValue
 
 		}()
 
@@ -117,6 +117,7 @@ func runBuild(scriptFileName string, funcCalls []string, secretsFile string) (do
 		}
 		program, err := goja.Compile(scriptFileName, loadScript(scriptFileName), false)
 		if err != nil {
+
 			panic(fmt.Sprintln("Failed to compile script ", scriptFileName, err))
 		}
 
@@ -127,29 +128,33 @@ func runBuild(scriptFileName string, funcCalls []string, secretsFile string) (do
 		httpclient.RegisterJSObjects(b)
 		secret.RegisterJSObjects(b)
 
-		runVal, err := b.Jse.RunProgram(program)
+		_, err = b.Jse.RunProgram(program)
 
 		if err != nil {
-			b.Logger.Panic("Failed to run program", err)
+			runReturnedValue = b.Jse.ToValue(fmt.Errorf("Failed to run program %s", err))
+			return
 		}
-		b.Logger.Info("Programe run return value: ", runVal)
+
+		var funcNames = []string{"main"}
+
 		if len(funcCalls) > 0 {
-			for _, fn := range funcCalls {
-				fnc, ok := goja.AssertFunction(b.Jse.Get(fn))
-				if !ok {
-					b.Logger.Panic(fmt.Errorf("function %s not found", fn))
-				}
-				fnc(goja.Undefined())
-			}
+			funcNames = funcCalls
+		}
 
-		} else {
-			mainFunc, ok := goja.AssertFunction(b.Jse.Get("main"))
+		for _, fn := range funcNames {
+			_, ok := goja.AssertFunction(b.Jse.Get(fn))
 			if !ok {
-				b.Logger.Panic("main function not found")
+				b.Logger.Panic(fmt.Errorf("function %s not found", fn))
 			}
-			mainFunc(goja.Undefined())
+			_, err = b.Jse.RunString(fmt.Sprintf("%s()", fn))
+			if jserr, ok := err.(*goja.Exception); ok {
+				b.Logger.Error("Failure at execution ", jserr)
+				runReturnedValue = b.Jse.ToValue(jserr)
+				break
+			}
 
 		}
+
 	}()
 	return
 }
@@ -174,8 +179,13 @@ func main() {
 	if !isAgent {
 		doneCH, _, _ := runBuild(scriptFileName, funcCalls, secretsFile)
 
-		<-doneCH
-		fmt.Println("Done running Banaifile", scriptFileName)
+		exitValue := <-doneCH
+		if exitValue != nil {
+			fmt.Println("Exit running Banaifile", scriptFileName, " Last result was ", exitValue)
+		} else {
+			fmt.Println("Exit running Banaifile", scriptFileName)
+		}
+
 	}
 
 }

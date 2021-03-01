@@ -69,9 +69,9 @@ function remoteCommands() {
 function fileExamples() {
     var finalFile = "dump/my-text12.txt"
     fsRemove(finalFile)
-    var fileContentBin = fsRead("examples/text.sh")
+    var fileContentBin = fsRead("examples/script.sh")
     println("Reading file:\n", fileContentBin)
-    var fileContentText = fsRead("examples/text.sh")
+    var fileContentText = fsRead("examples/script.sh")
 
     fsWrite("dump/bin.txt", fileContentText)
 
@@ -98,6 +98,10 @@ function fileExamples() {
     println("Only sub directories in dump:", res)
 
     println("Absolute path of ", finalFile, "is", fsAbs(finalFile))
+
+    println(JSON.stringify(fsItemInfo("examples")))
+
+    println(JSON.stringify(fsItemInfo("examples/script.sh")))
 }
 
 function zipExample() {
@@ -157,5 +161,5 @@ function main() {
     // zipExample()
     // hashExample()
     // testREST()
-    testSecrets()
+    // testSecrets()
 }

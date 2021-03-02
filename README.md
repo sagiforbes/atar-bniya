@@ -1,4 +1,4 @@
-# Project stopped and continue as banai-ci/banai
+# Project stopped and continue as [banai-ci/banai](https://github.com/banai-ci/banai)
 
 Banai is a single exeutable that runs Banaifile script file. Banaifile script is a Javascript ES5. This means you get all standard libraries from Javascript (ES5) plus objects and functions from banai executor. All the code in the example is a Javascript code written in Banaifile
 
